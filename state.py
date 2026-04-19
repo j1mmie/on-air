@@ -19,17 +19,24 @@ class State:
     def __init__(self):
         self._checkins = []  # [Checkin, ...]
 
-    def add(self, name: str) -> bool:
-        """Record or renew name. Returns True if new, False if renewing."""
+    def find(self, name: str):
         for checkin in self._checkins:
             if checkin.name == name:
-                checkin.renew()
-                return False
+                return checkin
+        return None
+
+    def add(self, name: str) -> bool:
+        """Record or renew name. Returns True if new, False if renewing."""
+        checkin = self.find(name)
+        if checkin:
+            checkin.renew()
+            return False
         self._checkins.append(Checkin(name))
         return True
 
     def remove(self, name: str) -> None:
-        self._checkins = [c for c in self._checkins if c.name != name]
+        target = self.find(name)
+        self._checkins = [c for c in self._checkins if c is not target]
 
     def is_on_air(self) -> bool:
         return bool(self._checkins)
