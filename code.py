@@ -3,8 +3,9 @@ import wifi
 import socketpool
 from display import Display
 from server import make_server
+from state import State
 
-people = {}
+state = State()
 
 display = Display()
 display.refresh(False)
@@ -15,7 +16,7 @@ ip = str(wifi.radio.ipv4_address)
 print(f"Connected! IP: {ip}")
 
 pool = socketpool.SocketPool(wifi.radio)
-server = make_server(pool, people, display)
+server = make_server(pool, state, display)
 print(f"Listening on http://{ip}/")
 server.start(ip)
 
@@ -24,3 +25,9 @@ while True:
         server.poll()
     except Exception as e:
         print(f"Server error: {e}")
+
+    expired = state.tick()
+    if expired:
+        for name in expired:
+            print(f"TIMEOUT: {name} | active={state.active()}")
+        display.refresh(state.is_on_air())
