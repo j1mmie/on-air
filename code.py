@@ -59,8 +59,8 @@ refresh_display()
 # --- WiFi ---
 print("Connecting to WiFi...")
 wifi.radio.connect(
-    os.getenv("CIRCUITPY_WIFI_SSID"),
-    os.getenv("CIRCUITPY_WIFI_PASSWORD"),
+    os.getenv("WIFI_SSID"),
+    os.getenv("WIFI_PASSWORD"),
 )
 ip = str(wifi.radio.ipv4_address)
 print(f"Connected! IP: {ip}")
