@@ -35,8 +35,10 @@ class State:
         return True
 
     def remove(self, name: str) -> None:
-        target = self.find(name)
-        self._checkins = [c for c in self._checkins if c is not target]
+        for i, c in enumerate(self._checkins):
+            if c.name == name:
+                del self._checkins[i]
+                return
 
     def is_on_air(self) -> bool:
         return bool(self._checkins)
