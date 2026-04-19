@@ -6,13 +6,13 @@ TIMEOUT = 120  # seconds
 class Checkin:
     def __init__(self, name: str):
         self.name = name
-        self.checkin_time = time.monotonic()
+        self.expiry_time = time.monotonic() + TIMEOUT
 
     def renew(self) -> None:
-        self.checkin_time = time.monotonic()
+        self.expiry_time = time.monotonic() + TIMEOUT
 
     def is_expired(self) -> bool:
-        return time.monotonic() - self.checkin_time > TIMEOUT
+        return time.monotonic() > self.expiry_time
 
 
 class State:
