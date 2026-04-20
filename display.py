@@ -60,18 +60,20 @@ class Display:
         if is_on_air:
             new_circle = Circle(7, 13, 6, fill=0xFF0000)
             self._status_label.text = "On Air"
+            self._status_label.color = 0xFFFFFF
         else:
             new_circle = Circle(7, 13, 6, fill=0x000000, outline=0x404040, stroke=2)
             self._status_label.text = "Off Air"
+            self._status_label.color = 0x606060
         self._group[0] = new_circle
         self._circle = new_circle
 
         text = ", ".join(names)
         self._names_label.text = text or " "
-        self._names_label.x = 0
         self._scroll_x = 0
         self._text_width = self._names_label.bounding_box[2]
         self._scroll_needed = bool(text) and self._text_width > 64
+        self._names_label.x = 0 if self._scroll_needed else (64 - self._text_width) // 2
         self._last_scroll_t = time.monotonic()
 
         self._display.refresh()
