@@ -61,7 +61,7 @@ class Display:
             new_circle = Circle(7, 13, 6, fill=0xFF0000)
             self._status_label.text = "On Air"
         else:
-            new_circle = Circle(7, 13, 6, fill=0x000000, outline=0x606060, stroke=2)
+            new_circle = Circle(7, 13, 6, fill=0x000000, outline=0x404040, stroke=2)
             self._status_label.text = "Off Air"
         self._group[0] = new_circle
         self._circle = new_circle
