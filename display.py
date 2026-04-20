@@ -10,6 +10,10 @@ from adafruit_display_shapes.circle import Circle
 
 SCROLL_DELAY = 0.25 # seconds per pixel (~25 fps)
 
+AMBER = 0xFF8000
+GREEN = 0x00FF00
+RED   = 0xFF0000
+
 class Display:
     def __init__(self):
         displayio.release_displays()
@@ -28,23 +32,6 @@ class Display:
 
         names_font = bitmap_font.load_font("/fonts/tom-thumb.bdf")
 
-        self._circle = Circle(
-            x0=9,
-            y0=13,
-            r=6,
-            fill=0x000000,
-            outline=0x606060,
-            stroke=2
-        )
-
-        self._status_label = label.Label(
-            terminalio.FONT,
-            text="Off Air",
-            color=0x404040,
-            anchor_point=(0, 0.5),
-            anchored_position=(20, 14),
-        )
-
         self._names_label = label.Label(
             names_font,
             text=" ",
@@ -53,10 +40,18 @@ class Display:
             y=25,
         )
 
+        self._pixel_bmp = displayio.Bitmap(1, 1, 1)
+        self._pixel_palette = displayio.Palette(1)
+        self._pixel_palette[0] = AMBER
+        self._pixel_tile = displayio.TileGrid(self._pixel_bmp, pixel_shader=self._pixel_palette, x=2, y=2)
+        self._pixel_in_group = True
+
+        self._circle = None
+        self._status_label = None
+
         self._group = displayio.Group()
-        self._group.append(self._circle)
-        self._group.append(self._status_label)
         self._group.append(self._names_label)
+        self._group.append(self._pixel_tile)
         self._display.root_group = self._group
 
         self._scroll_x = 0
@@ -64,16 +59,44 @@ class Display:
         self._scroll_needed = False
         self._last_scroll_t = 0.0
 
+    def server_ready(self) -> None:
+        self._pixel_palette[0] = GREEN
+        self._display.refresh()
+
+    def show_error(self) -> None:
+        self._pixel_palette[0] = RED
+        error_group = displayio.Group()
+        error_group.append(self._pixel_tile)
+        self._display.root_group = error_group
+        self._display.refresh()
+
     def refresh(self, is_on_air: bool, names: list) -> None:
         if is_on_air:
-            new_circle = Circle(10, 13, 5, fill=0xFF0000)
-            self._status_label.text = "On Air"
-            self._status_label.color = 0xFFFFFF
+            if self._circle is None:
+                self._circle = Circle(10, 13, 5, fill=0xFF0000)
+                self._group.append(self._circle)
+            if self._status_label is None:
+                self._status_label = label.Label(
+                    terminalio.FONT,
+                    text="On Air",
+                    color=0xFFFFFF,
+                    anchor_point=(0, 0.5),
+                    anchored_position=(20, 14),
+                )
+                self._group.append(self._status_label)
+            if self._pixel_in_group:
+                self._group.remove(self._pixel_tile)
+                self._pixel_in_group = False
         else:
-            new_circle = Circle(0, 0, 1, fill=0x000000)
-            self._status_label.text = ""
-        self._group[0] = new_circle
-        self._circle = new_circle
+            if self._circle is not None:
+                self._group.remove(self._circle)
+                self._circle = None
+            if self._status_label is not None:
+                self._group.remove(self._status_label)
+                self._status_label = None
+            if not self._pixel_in_group:
+                self._group.append(self._pixel_tile)
+                self._pixel_in_group = True
 
         text = ",".join(names)
         self._names_label.text = text or " "
