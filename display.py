@@ -8,8 +8,7 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
 from adafruit_display_shapes.circle import Circle
 
-SCROLL_DELAY = 0.04  # seconds per pixel (~25 fps)
-
+SCROLL_DELAY = 0.25 # seconds per pixel (~25 fps)
 
 class Display:
     def __init__(self):
@@ -29,18 +28,27 @@ class Display:
 
         names_font = bitmap_font.load_font("/fonts/tom-thumb.bdf")
 
-        self._circle = Circle(7, 13, 6, fill=0x000000, outline=0x606060, stroke=2)
+        self._circle = Circle(
+            x0=9,
+            y0=13,
+            r=6,
+            fill=0x000000,
+            outline=0x606060,
+            stroke=2
+        )
+
         self._status_label = label.Label(
             terminalio.FONT,
             text="Off Air",
-            color=0xFFFFFF,
+            color=0x404040,
             anchor_point=(0, 0.5),
-            anchored_position=(16, 13),
+            anchored_position=(20, 14),
         )
+
         self._names_label = label.Label(
             names_font,
             text=" ",
-            color=0xAAAAAA,
+            color=0x404040,
             x=0,
             y=25,
         )
@@ -58,17 +66,16 @@ class Display:
 
     def refresh(self, is_on_air: bool, names: list) -> None:
         if is_on_air:
-            new_circle = Circle(7, 13, 6, fill=0xFF0000)
+            new_circle = Circle(10, 13, 5, fill=0xFF0000)
             self._status_label.text = "On Air"
             self._status_label.color = 0xFFFFFF
         else:
-            new_circle = Circle(7, 13, 6, fill=0x000000, outline=0x404040, stroke=2)
-            self._status_label.text = "Off Air"
-            self._status_label.color = 0x606060
+            new_circle = Circle(0, 0, 1, fill=0x000000)
+            self._status_label.text = ""
         self._group[0] = new_circle
         self._circle = new_circle
 
-        text = ", ".join(names)
+        text = ",".join(names)
         self._names_label.text = text or " "
         self._scroll_x = 0
         self._text_width = self._names_label.bounding_box[2]
