@@ -8,7 +8,7 @@ from state import State
 state = State()
 
 display = Display()
-display.refresh(False)
+display.refresh(False, [])
 
 print("Connecting to WiFi...")
 wifi.radio.connect(os.getenv("WIFI_SSID"), os.getenv("WIFI_PASSWORD"))
@@ -30,4 +30,6 @@ while True:
     if expired:
         for name in expired:
             print(f"TIMEOUT: {name} | active={state.active()}")
-        display.refresh(state.is_on_air())
+        display.refresh(state.is_on_air(), state.active())
+
+    display.tick()
