@@ -1,29 +1,51 @@
 import os
+import time
 import wifi
 import socketpool
 from display import Display
 from server import make_server
 from state import State
 
-state = State()
+RETRY_INTERVAL = 60
 
+state = State()
 display = Display()
 display.refresh(False, [])
 
-try:
-    print("Connecting to WiFi...")
-    wifi.radio.connect(os.getenv("WIFI_SSID"), os.getenv("WIFI_PASSWORD"))
-    ip = str(wifi.radio.ipv4_address)
-    print(f"Connected! IP: {ip}")
+while True:
+    # WiFi connection phase — retry with WIFI_0 until connected
+    while not wifi.radio.connected:
+        try:
+            print("Connecting to WiFi...")
+            wifi.radio.connect(os.getenv("WIFI_SSID"), os.getenv("WIFI_PASSWORD"))
+            print(f"Connected! IP: {wifi.radio.ipv4_address}")
+        except Exception as e:
+            print(f"WiFi error: {e}")
+            display.show_error("WIFI_0")
+            time.sleep(RETRY_INTERVAL)
 
-    pool = socketpool.SocketPool(wifi.radio)
-    server = make_server(pool, state, display)
-    server.start(ip)
-    print(f"Listening on http://{ip}/")
-    display.server_ready()
+    # Server setup phase
+    try:
+        ip = str(wifi.radio.ipv4_address)
+        pool = socketpool.SocketPool(wifi.radio)
+        server = make_server(pool, state, display)
+        server.start(ip)
+        print(f"Listening on http://{ip}/")
+        display.server_ready()
+    except Exception as e:
+        print(f"Server error: {e}")
+        display.show_error("WIFI_0")
+        time.sleep(RETRY_INTERVAL)
+        continue
 
-    while True:
-        server.poll()
+    # Main loop — exit when WiFi is lost
+    while wifi.radio.connected:
+        try:
+            server.poll()
+        except Exception as e:
+            print(f"Poll error: {e}")
+            if not wifi.radio.connected:
+                break
 
         expired = state.tick()
         if expired:
@@ -33,8 +55,8 @@ try:
 
         display.tick()
 
-except Exception as e:
-    print(f"FATAL: {e}")
-    display.show_error()
-    while True:
-        pass
+    # WiFi was lost — clear state and wait before reconnecting
+    print("WiFi lost")
+    state.clear()
+    display.show_error("WIFI_1")
+    time.sleep(RETRY_INTERVAL)

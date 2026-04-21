@@ -46,6 +46,9 @@ class State:
     def active(self) -> list:
         return [c.name for c in self._checkins]
 
+    def clear(self) -> None:
+        self._checkins = []
+
     def tick(self) -> list:
         """Remove expired checkins and return their names."""
         expired = [c for c in self._checkins if c.is_expired()]
