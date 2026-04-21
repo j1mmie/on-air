@@ -7,8 +7,7 @@ import terminalio
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
 from adafruit_display_shapes.circle import Circle
-
-SCROLL_DELAY = 0.25 # seconds per pixel (~25 fps)
+from scroller import Scroller
 
 AMBER = 0xFF8000
 GREEN = 0x00FF00
@@ -56,10 +55,8 @@ class Display:
         self._group.append(self._pixel_tile)
         self._display.root_group = self._group
 
-        self._scroll_x = 0
-        self._text_width = 0
-        self._scroll_needed = False
-        self._last_scroll_t = 0.0
+        self._scroller = Scroller()
+        self._scroll_active = False
 
     def _clear_error(self) -> None:
         if self._error_in_group:
@@ -104,7 +101,7 @@ class Display:
             self._error_in_group = True
 
         self._names_label.text = " "
-        self._scroll_needed = False
+        self._scroll_active = False
         self._display.refresh()
 
     def refresh(self, is_on_air: bool, names: list) -> None:
@@ -139,23 +136,19 @@ class Display:
 
         text = ",".join(names)
         self._names_label.text = text or " "
-        self._scroll_x = 0
-        self._text_width = self._names_label.bounding_box[2]
-        self._scroll_needed = bool(text) and self._text_width > 64
-        self._names_label.x = 0 if self._scroll_needed else (64 - self._text_width) // 2
-        self._last_scroll_t = time.monotonic()
+        text_width = self._names_label.bounding_box[2]
+        self._scroll_active = bool(text) and text_width > 64
+        if self._scroll_active:
+            self._names_label.x = self._scroller.reset(text_width)
+        else:
+            self._names_label.x = (64 - text_width) // 2
 
         self._display.refresh()
 
     def tick(self) -> None:
-        if not self._scroll_needed:
+        if not self._scroll_active:
             return
-        now = time.monotonic()
-        if now - self._last_scroll_t < SCROLL_DELAY:
-            return
-        self._last_scroll_t = now
-        self._scroll_x -= 1
-        if self._scroll_x + self._text_width < 0:
-            self._scroll_x = 0
-        self._names_label.x = self._scroll_x
-        self._display.refresh()
+        new_x = self._scroller.tick()
+        if new_x is not None:
+            self._names_label.x = new_x
+            self._display.refresh()
