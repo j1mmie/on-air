@@ -48,6 +48,8 @@ class Display:
 
         self._circle = None
         self._status_label = None
+        self._error_label = None
+        self._error_in_group = False
 
         self._group = displayio.Group()
         self._group.append(self._names_label)
@@ -59,18 +61,55 @@ class Display:
         self._scroll_needed = False
         self._last_scroll_t = 0.0
 
+    def _clear_error(self) -> None:
+        if self._error_in_group:
+            self._group.remove(self._error_label)
+            self._error_in_group = False
+
     def server_ready(self) -> None:
+        self._clear_error()
         self._pixel_palette[0] = GREEN
+        if not self._pixel_in_group:
+            self._group.append(self._pixel_tile)
+            self._pixel_in_group = True
         self._display.refresh()
 
-    def show_error(self) -> None:
+    def show_error(self, code: str) -> None:
+        # Remove circle/label if a checkin was active when the error hit
+        if self._circle is not None:
+            self._group.remove(self._circle)
+            self._circle = None
+        if self._status_label is not None:
+            self._group.remove(self._status_label)
+            self._status_label = None
+
         self._pixel_palette[0] = RED
-        error_group = displayio.Group()
-        error_group.append(self._pixel_tile)
-        self._display.root_group = error_group
+        if not self._pixel_in_group:
+            self._group.append(self._pixel_tile)
+            self._pixel_in_group = True
+
+        if self._error_label is None:
+            self._error_label = label.Label(
+                terminalio.FONT,
+                text=code,
+                color=0xFFFFFF,
+                anchor_point=(0.5, 0.5),
+                anchored_position=(32, 16),
+            )
+        else:
+            self._error_label.text = code
+
+        if not self._error_in_group:
+            self._group.append(self._error_label)
+            self._error_in_group = True
+
+        self._names_label.text = " "
+        self._scroll_needed = False
         self._display.refresh()
 
     def refresh(self, is_on_air: bool, names: list) -> None:
+        self._clear_error()
+
         if is_on_air:
             if self._circle is None:
                 self._circle = Circle(10, 13, 5, fill=0xFF0000)
