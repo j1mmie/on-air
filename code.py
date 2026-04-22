@@ -10,10 +10,10 @@ WIFI_RECONNECT_INTERVAL = 60
 
 state = State()
 display = Display()
-display.refresh(False, [])
-display.start_spinner()
 
 while True:
+    display.connecting()
+
     # WiFi connection phase — retry with WIFI_0 until connected
     while not wifi.radio.connected:
         try:
