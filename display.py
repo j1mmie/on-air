@@ -8,6 +8,7 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
 from adafruit_display_shapes.circle import Circle
 from scroller import Scroller
+from progress import ProgressBar
 
 AMBER = 0xFF8000
 GREEN = 0x00FF00
@@ -58,13 +59,25 @@ class Display:
         self._scroller = Scroller()
         self._scroll_active = False
 
+        self._progress_bar = ProgressBar(names_font, self._group)
+
     def _clear_error(self) -> None:
         if self._error_in_group:
             self._group.remove(self._error_label)
             self._error_in_group = False
 
+    def start_spinner(self) -> None:
+        self._progress_bar.start_spinner()
+
+    def start_countdown(self, duration) -> None:
+        self._progress_bar.start_countdown(duration)
+
+    def stop_progress(self) -> None:
+        self._progress_bar.stop()
+
     def server_ready(self) -> None:
         self._clear_error()
+        self._progress_bar.stop()
         self._pixel_palette[0] = GREEN
         if not self._pixel_in_group:
             self._group.append(self._pixel_tile)
@@ -146,9 +159,13 @@ class Display:
         self._display.refresh()
 
     def tick(self) -> None:
-        if not self._scroll_active:
-            return
-        new_x = self._scroller.tick()
-        if new_x is not None:
-            self._names_label.x = new_x
+        needs_refresh = False
+        if self._scroll_active:
+            new_x = self._scroller.tick()
+            if new_x is not None:
+                self._names_label.x = new_x
+                needs_refresh = True
+        if self._progress_bar.tick():
+            needs_refresh = True
+        if needs_refresh:
             self._display.refresh()

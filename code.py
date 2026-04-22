@@ -11,6 +11,7 @@ RETRY_INTERVAL = 60
 state = State()
 display = Display()
 display.refresh(False, [])
+display.start_spinner()
 
 while True:
     # WiFi connection phase — retry with WIFI_0 until connected
@@ -22,7 +23,10 @@ while True:
         except Exception as e:
             print(f"WiFi error: {e}")
             display.show_error("WIFI_0")
-            time.sleep(RETRY_INTERVAL)
+            deadline = time.monotonic() + RETRY_INTERVAL
+            while time.monotonic() < deadline:
+                display.tick()
+                time.sleep(0.05)
 
     # Server setup phase
     try:
@@ -35,7 +39,10 @@ while True:
     except Exception as e:
         print(f"Server error: {e}")
         display.show_error("WIFI_0")
-        time.sleep(RETRY_INTERVAL)
+        deadline = time.monotonic() + RETRY_INTERVAL
+        while time.monotonic() < deadline:
+            display.tick()
+            time.sleep(0.05)
         continue
 
     # Main loop — exit when WiFi is lost
@@ -59,4 +66,8 @@ while True:
     print("WiFi lost")
     state.clear()
     display.show_error("WIFI_1")
-    time.sleep(RETRY_INTERVAL)
+    display.start_countdown(RETRY_INTERVAL)
+    deadline = time.monotonic() + RETRY_INTERVAL
+    while time.monotonic() < deadline:
+        display.tick()
+        time.sleep(0.05)
