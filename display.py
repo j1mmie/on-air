@@ -10,8 +10,9 @@ from adafruit_display_shapes.circle import Circle
 from scroller import Scroller
 from progress import ProgressBar
 
-AMBER = 0xFF8000
-GREEN = 0x00FF00
+# Green and Blue are swapped on the RGBMatrix
+AMBER = 0xFF0080
+GREEN = 0x0000FF
 RED   = 0xFF0000
 
 class Display:

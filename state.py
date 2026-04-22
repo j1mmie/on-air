@@ -1,7 +1,6 @@
 import time
 
-TIMEOUT = 120  # seconds
-
+TIMEOUT = 120 # seconds
 
 class Checkin:
     def __init__(self, name: str):
@@ -13,7 +12,6 @@ class Checkin:
 
     def is_expired(self) -> bool:
         return time.monotonic() > self.expiry_time
-
 
 class State:
     def __init__(self):
