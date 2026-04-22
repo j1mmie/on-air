@@ -14,15 +14,17 @@ display = Display()
 while True:
     display.connecting()
 
-    # WiFi connection phase — retry with WIFI_0 until connected
+    # WiFi connection phase — retry until connected
     while not wifi.radio.connected:
+        display.connecting()
         try:
             print("Connecting to WiFi...")
             wifi.radio.connect(os.getenv("WIFI_SSID"), os.getenv("WIFI_PASSWORD"))
             print(f"Connected! IP: {wifi.radio.ipv4_address}")
         except Exception as e:
             print(f"WiFi error: {e}")
-            display.show_error("WIFI_0")
+            display.show_error()
+            display.start_countdown(WIFI_RECONNECT_INTERVAL)
             deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
             while time.monotonic() < deadline:
                 display.tick()
@@ -38,7 +40,7 @@ while True:
         display.server_ready()
     except Exception as e:
         print(f"Server error: {e}")
-        display.show_error("WIFI_0")
+        display.show_error()
         deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
         while time.monotonic() < deadline:
             display.tick()
@@ -65,7 +67,7 @@ while True:
     # WiFi was lost — clear state and wait before reconnecting
     print("WiFi lost")
     state.clear()
-    display.show_error("WIFI_1")
+    display.show_error()
     display.start_countdown(WIFI_RECONNECT_INTERVAL)
     deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
     while time.monotonic() < deadline:
