@@ -60,7 +60,7 @@ class Display:
         self._scroller = Scroller()
         self._scroll_active = False
 
-        self._progress_bar = ProgressBar(names_font, self._group)
+        self._progress_bar = ProgressBar(self._group)
 
     def _clear_error(self) -> None:
         if self._error_in_group:
@@ -69,9 +69,11 @@ class Display:
 
     def start_spinner(self) -> None:
         self._progress_bar.start_spinner()
+        self._display.refresh()
 
     def start_countdown(self, duration) -> None:
         self._progress_bar.start_countdown(duration)
+        self._display.refresh()
 
     def stop_progress(self) -> None:
         self._progress_bar.stop()
