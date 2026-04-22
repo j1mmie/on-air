@@ -6,7 +6,7 @@ from display import Display
 from server import make_server
 from state import State
 
-RETRY_INTERVAL = 60
+WIFI_RECONNECT_INTERVAL = 60
 
 state = State()
 display = Display()
@@ -23,7 +23,7 @@ while True:
         except Exception as e:
             print(f"WiFi error: {e}")
             display.show_error("WIFI_0")
-            deadline = time.monotonic() + RETRY_INTERVAL
+            deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
             while time.monotonic() < deadline:
                 display.tick()
                 time.sleep(0.05)
@@ -39,7 +39,7 @@ while True:
     except Exception as e:
         print(f"Server error: {e}")
         display.show_error("WIFI_0")
-        deadline = time.monotonic() + RETRY_INTERVAL
+        deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
         while time.monotonic() < deadline:
             display.tick()
             time.sleep(0.05)
@@ -66,8 +66,8 @@ while True:
     print("WiFi lost")
     state.clear()
     display.show_error("WIFI_1")
-    display.start_countdown(RETRY_INTERVAL)
-    deadline = time.monotonic() + RETRY_INTERVAL
+    display.start_countdown(WIFI_RECONNECT_INTERVAL)
+    deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
     while time.monotonic() < deadline:
         display.tick()
         time.sleep(0.05)

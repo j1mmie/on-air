@@ -1,6 +1,5 @@
 from adafruit_httpserver import Server, Request, Response
 
-
 def make_server(pool, state, display) -> Server:
     server = Server(pool, debug=True)
 
