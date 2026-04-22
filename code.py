@@ -22,7 +22,7 @@ while True:
             print(f"Connected! IP: {wifi.radio.ipv4_address}")
         except Exception as e:
             print(f"WiFi error: {e}")
-            display.show_error("WIFI_0")
+            display.show_error()
             deadline = time.monotonic() + RETRY_INTERVAL
             while time.monotonic() < deadline:
                 display.tick()
@@ -38,7 +38,7 @@ while True:
         display.server_ready()
     except Exception as e:
         print(f"Server error: {e}")
-        display.show_error("WIFI_0")
+        display.show_error()
         deadline = time.monotonic() + RETRY_INTERVAL
         while time.monotonic() < deadline:
             display.tick()
@@ -65,7 +65,7 @@ while True:
     # WiFi was lost — clear state and wait before reconnecting
     print("WiFi lost")
     state.clear()
-    display.show_error("WIFI_1")
+    display.show_error()
     display.start_countdown(RETRY_INTERVAL)
     deadline = time.monotonic() + RETRY_INTERVAL
     while time.monotonic() < deadline:
