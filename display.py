@@ -66,16 +66,14 @@ class Display:
             self._group.remove(self._error_label)
             self._error_in_group = False
 
-    def start_spinner(self) -> None:
-        self._progress_bar.start_spinner()
-        self._display.refresh()
+    def connecting(self) -> None:
+        self._pixel_palette[0] = AMBER
+        self._progress_bar.stop()
+        self.refresh(False, [])
 
     def start_countdown(self, duration) -> None:
         self._progress_bar.start_countdown(duration)
         self._display.refresh()
-
-    def stop_progress(self) -> None:
-        self._progress_bar.stop()
 
     def server_ready(self) -> None:
         self._clear_error()
