@@ -14,8 +14,9 @@ display = Display()
 while True:
     display.connecting()
 
-    # WiFi connection phase — retry with WIFI_0 until connected
+    # WiFi connection phase — retry until connected
     while not wifi.radio.connected:
+        display.connecting()
         try:
             print("Connecting to WiFi...")
             wifi.radio.connect(os.getenv("WIFI_SSID"), os.getenv("WIFI_PASSWORD"))
@@ -23,6 +24,7 @@ while True:
         except Exception as e:
             print(f"WiFi error: {e}")
             display.show_error()
+            display.start_countdown(RETRY_INTERVAL)
             deadline = time.monotonic() + RETRY_INTERVAL
             while time.monotonic() < deadline:
                 display.tick()
