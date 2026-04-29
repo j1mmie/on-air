@@ -1,4 +1,4 @@
-# circup install neopixel
+# circup install neopixel adafruit_requests
 import os
 import time
 import wifi
