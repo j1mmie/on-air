@@ -8,23 +8,14 @@ import neopixel
 import adafruit_requests
 from network import NetworkManager
 
-pixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.2, auto_write=True)
+pixel        = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.2, auto_write=True)
+button_pixel = neopixel.NeoPixel(board.A3,       1, brightness=0.2, auto_write=True)
 
 ORANGE  = (255, 100,   0)
 GREEN   = (  0, 255,   0)
 RED     = (255,   0,   0)
 FUCHSIA = (255,   0, 255)
-BLUE    = (  0,   0, 255)
-YELLOW  = (255, 200,   0)
 OFF     = (  0,   0,   0)
-
-def blink(color, times, restore):
-    for _ in range(times):
-        pixel[0] = color
-        time.sleep(0.1)
-        pixel[0] = OFF
-        time.sleep(0.1)
-    pixel[0] = restore
 
 SEND_INTERVAL = 60
 
@@ -48,25 +39,27 @@ def on_connected(pool):
     prev_value   = True   # True = not pressed (pull-up, active low)
     debounce_end = 0
 
+    button_pixel[0] = OFF
+
     while wifi.radio.connected:
-        now       = time.monotonic()
+        now        = time.monotonic()
         curr_value = button.value  # False = pressed
 
         # Detect falling edge after debounce settles
         if not curr_value and prev_value and now >= debounce_end:
             debounce_end = now + 0.05
             if active:
-                active = False
-                blink(YELLOW, 3, GREEN)
+                active          = False
+                button_pixel[0] = OFF
                 try:
                     session.get(f"{base_url}/off?name={name}")
                     print(f"OFF: {name}")
                 except Exception as e:
                     print(f"Request error: {e}")
             else:
-                active    = True
-                last_send = now - SEND_INTERVAL  # trigger immediate first send
-                blink(BLUE, 3, FUCHSIA)
+                active          = True
+                last_send       = now - SEND_INTERVAL  # trigger immediate first send
+                button_pixel[0] = FUCHSIA
 
         prev_value = curr_value
 
@@ -75,12 +68,13 @@ def on_connected(pool):
                 session.get(f"{base_url}/on?name={name}")
                 print(f"ON: {name}")
                 last_send = now
-                blink(BLUE, 1, FUCHSIA)
             except Exception as e:
                 print(f"Request error: {e}")
                 if not wifi.radio.connected:
                     break
 
         time.sleep(0.01)
+
+    button_pixel[0] = OFF
 
 NetworkManager(ClickerStatus()).run(on_connected)
