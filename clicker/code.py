@@ -40,7 +40,7 @@ def on_connected(pool):
     name     = os.getenv("CLICKER_NAME")
     session  = adafruit_requests.Session(pool)
 
-    button = digitalio.DigitalInOut(board.D0)
+    button = digitalio.DigitalInOut(board.A2)
     button.switch_to_input(pull=digitalio.Pull.UP)
 
     active       = False
