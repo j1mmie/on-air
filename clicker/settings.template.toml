@@ -1,0 +1,4 @@
+WIFI_SSID = "your-network-name"
+WIFI_PASSWORD = "your-password"
+SERVER_URL = "http://192.168.4.234:5000"
+CLICKER_NAME = "Ashley"
