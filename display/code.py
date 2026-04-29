@@ -1,58 +1,33 @@
-import os
-import time
 import wifi
-import socketpool
 from display import Display
 from server import make_server
 from state import State
+from network import NetworkManager
 
-WIFI_RECONNECT_INTERVAL = 60
-
-state = State()
 display = Display()
+state = State()
 
-while True:
-    display.connecting()
+class DisplayStatus:
+    def on_connecting(self):      display.connecting()
+    def on_connected(self):       pass  # server_ready() called after server setup
+    def on_disconnected(self):    display.show_error()
+    def start_countdown(self, d): display.start_countdown(d)
+    def tick(self):               display.tick()
 
-    # WiFi connection phase — retry until connected
-    while not wifi.radio.connected:
-        display.connecting()
-        try:
-            print("Connecting to WiFi...")
-            wifi.radio.connect(os.getenv("WIFI_SSID"), os.getenv("WIFI_PASSWORD"))
-            print(f"Connected! IP: {wifi.radio.ipv4_address}")
-        except Exception as e:
-            print(f"WiFi error: {e}")
-            display.show_error()
-            display.start_countdown(WIFI_RECONNECT_INTERVAL)
-            deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
-            while time.monotonic() < deadline:
-                display.tick()
-                time.sleep(0.05)
-
-    # Server setup phase
+def on_connected(pool):
     try:
-        ip = str(wifi.radio.ipv4_address)
-        pool = socketpool.SocketPool(wifi.radio)
         server = make_server(pool, state, display)
-        server.start(ip)
-        print(f"Listening on http://{ip}/")
+        server.start(str(wifi.radio.ipv4_address))
+        print(f"Listening on http://{wifi.radio.ipv4_address}/")
         display.server_ready()
     except Exception as e:
         print(f"Server error: {e}")
-        display.show_error()
-        deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
-        while time.monotonic() < deadline:
-            display.tick()
-            time.sleep(0.05)
-        continue
+        return
 
-    # Main loop — exit when WiFi is lost
     while wifi.radio.connected:
         try:
             server.poll()
         except Exception as e:
-            print(f"Poll error: {e}")
             if not wifi.radio.connected:
                 break
 
@@ -64,12 +39,7 @@ while True:
 
         display.tick()
 
-    # WiFi was lost — clear state and wait before reconnecting
     print("WiFi lost")
     state.clear()
-    display.show_error()
-    display.start_countdown(WIFI_RECONNECT_INTERVAL)
-    deadline = time.monotonic() + WIFI_RECONNECT_INTERVAL
-    while time.monotonic() < deadline:
-        display.tick()
-        time.sleep(0.05)
+
+NetworkManager(DisplayStatus()).run(on_connected)
