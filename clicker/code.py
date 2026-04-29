@@ -1,3 +1,5 @@
+# circup install neopixel
+ 
 import wifi
 import board
 import neopixel
