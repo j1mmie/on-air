@@ -69,8 +69,8 @@ is_discord_active() {
 }
 
 is_zoom_active() {
-    # ZoomAudioService is spawned only while Zoom is connected to meeting audio
-    pgrep -x "ZoomAudioService" > /dev/null
+    # CptHost is spawned only while Zoom is connected to meeting audio
+    pgrep -x "CptHost" > /dev/null
 }
 
 is_any_active() {
