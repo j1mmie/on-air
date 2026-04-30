@@ -10,7 +10,7 @@
 #
 # ── Startup (launchd) ────────────────────────────────────────────────────────
 #
-# 1. Create /Library/LaunchDaemons/on-air-monitor.plist with these contents,
+# 1. Create ~/Library/LaunchAgents/on-air-monitor.plist with these contents,
 #    updating the script path, SERVER_URL, and NAME:
 #
 #    <?xml version="1.0" encoding="UTF-8"?>
@@ -39,11 +39,6 @@
 #        <string>a4:3e:51:00:00:00</string>
 #      </dict>
 #
-#      <!-- This is the user who runs the script -->
-#      <!-- not to be confused with the NAME env var -->
-#      <key>UserName</key>
-#      <string>root</string>
-#
 #      <key>RunAtLoad</key>
 #      <true/>
 #
@@ -59,10 +54,10 @@
 #    </plist>
 #
 # 2. Load it:
-#      sudo launchctl load /Library/LaunchDaemons/on-air-monitor.plist
+#      launchctl load ~/Library/LaunchAgents/on-air-monitor.plist
 #
-# To stop:     sudo launchctl unload /Library/LaunchDaemons/on-air-monitor.plist
-# To check:    sudo launchctl list | grep on-air-monitor
+# To stop:     launchctl unload ~/Library/LaunchAgents/on-air-monitor.plist
+# To check:    launchctl list | grep on-air-monitor
 # To view log: tail -f /tmp/on-air-monitor.log
 
 SERVER_URL="${SERVER_URL:-http://192.168.1.1:5000}"
