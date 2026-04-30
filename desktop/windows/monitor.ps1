@@ -15,8 +15,9 @@
 #      Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 #
 # 2. Store your settings as user environment variables (survives reboots):
-#      [Environment]::SetEnvironmentVariable("SERVER_URL", "http://192.168.1.1:5000", "User")
-#      [Environment]::SetEnvironmentVariable("NAME", "Ashley", "User")
+#      [Environment]::SetEnvironmentVariable("SERVER_URL",   "http://192.168.1.1:5000", "User")
+#      [Environment]::SetEnvironmentVariable("NAME",         "Ashley",                  "User")
+#      [Environment]::SetEnvironmentVariable("WIFI_NETWORK", "LilPuddin",               "User")
 #
 # 3. Register the scheduled task (runs at login, stays running):
 #      $script  = "$HOME\path\to\on-air\desktop\windows\monitor.ps1"
@@ -33,8 +34,9 @@
 # To remove:     Unregister-ScheduledTask -TaskName "OnAirMonitor" -Confirm:$false
 
 param(
-    [string]$ServerUrl    = ($env:SERVER_URL ?? "http://192.168.1.1:5000"),
-    [string]$Name         = ($env:NAME       ?? "desktop"),
+    [string]$ServerUrl    = ($env:SERVER_URL    ?? "http://192.168.1.1:5000"),
+    [string]$Name         = ($env:NAME          ?? "desktop"),
+    [string]$WifiNetwork  = ($env:WIFI_NETWORK  ?? "LilPuddin"),
     [int]   $PollSeconds  = 5,
     [int]   $RenewSeconds = 60
 )
@@ -145,6 +147,18 @@ public static class Wasapi {
 }
 '@ -ErrorAction Stop
 
+# ── Network check ───────────────────────────────────────────────────────────
+
+function Get-WifiSsid {
+    (netsh wlan show interfaces) -match '^\s+SSID\s+:' |
+        ForEach-Object { ($_ -split ':\s+', 2)[1].Trim() } |
+        Select-Object -First 1
+}
+
+function Test-OnRequiredNetwork {
+    (Get-WifiSsid) -eq $WifiNetwork
+}
+
 # ── Shared helpers ───────────────────────────────────────────────────────────
 
 function Get-AudioSessionPids {
@@ -199,10 +213,20 @@ function Test-AnyActive {
 $active   = $false
 $lastSent = [datetime]::MinValue
 
-Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name)"
+Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, network: $WifiNetwork)"
 
 while ($true) {
     $now = [datetime]::UtcNow
+
+    if (-not (Test-OnRequiredNetwork)) {
+        if ($active) {
+            Send-Notification "off"
+            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') OFF (left network)"
+            $active = $false
+        }
+        Start-Sleep -Seconds $PollSeconds
+        continue
+    }
 
     if (Test-AnyActive) {
         if (-not $active -or ($now - $lastSent).TotalSeconds -ge $RenewSeconds) {
