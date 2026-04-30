@@ -78,8 +78,10 @@ get_router_macs() {
     done < <(networksetup -listallhardwareports | awk '/Hardware Port: (Ethernet|Wi-Fi)/{getline; print $2}')
 }
 
-is_on_required_network() {
-    [[ -z "$ROUTER_MAC" ]] && return 0
+# Echoes the matched router MAC and returns 0 if on an applicable network; returns 1 otherwise.
+# Returns 1 immediately (no output) when ROUTER_MAC is unset — no filter is configured.
+get_applicable_router_mac() {
+    [[ -z "$ROUTER_MAC" ]] && return 1
 
     local current_macs entry mac
     current_macs=$(get_router_macs)
@@ -88,14 +90,21 @@ is_on_required_network() {
     for entry in "${entries[@]}"; do
         entry="${entry// /}"
         if [[ "$entry" == "lan" ]]; then
-            [[ -n "$current_macs" ]] && return 0
+            local first_mac
+            first_mac=$(echo "$current_macs" | head -1)
+            [[ -n "$first_mac" ]] && { echo "$first_mac"; return 0; }
         else
             while IFS= read -r mac; do
-                [[ "$entry" == "$mac" ]] && return 0
+                [[ "$entry" == "$mac" ]] && { echo "$entry"; return 0; }
             done <<< "$current_macs"
         fi
     done
     return 1
+}
+
+is_on_required_network() {
+    [[ -z "$ROUTER_MAC" ]] && return 0
+    get_applicable_router_mac > /dev/null
 }
 
 # ── App detection ────────────────────────────────────────────────────────────
@@ -118,15 +127,26 @@ is_any_active() {
 
 active=false
 last_sent=0
+network_applicable=""  # empty = unknown; "true" or "false" once determined
 
 echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, router: ${ROUTER_MAC:-any})"
 
 while true; do
     now=$(date +%s)
 
-    if ! is_on_required_network; then
-        sleep $POLL_INTERVAL
-        continue
+    if [[ -n "$ROUTER_MAC" ]]; then
+        matched_mac=$(get_applicable_router_mac)
+        if [[ -z "$matched_mac" ]]; then
+            if [[ "$network_applicable" != "false" ]]; then
+                echo "$(date '+%Y-%m-%dT%H:%M:%S') No applicable network found. No checks will be done until an applicable network is joined"
+                network_applicable="false"
+            fi
+            sleep $POLL_INTERVAL
+            continue
+        elif [[ "$network_applicable" != "true" ]]; then
+            echo "$(date '+%Y-%m-%dT%H:%M:%S') Discovered applicable network with router mac address $matched_mac"
+            network_applicable="true"
+        fi
     fi
 
     if is_any_active; then

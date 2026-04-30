@@ -162,18 +162,25 @@ function Get-RouterMacs {
     }
 }
 
-function Test-OnRequiredNetwork {
-    if (-not $RouterMac) { return $true }
+# Returns the matched router MAC if on an applicable network, $null otherwise.
+# Returns $null immediately when RouterMac is unset — no filter is configured.
+function Get-ApplicableRouterMac {
+    if (-not $RouterMac) { return $null }
 
     $currentMacs = @(Get-RouterMacs)
     foreach ($entry in ($RouterMac -split ',' | ForEach-Object { $_.Trim() })) {
         if ($entry -eq 'lan') {
-            if ($currentMacs.Count -gt 0) { return $true }
+            if ($currentMacs.Count -gt 0) { return $currentMacs[0] }
         } elseif ($currentMacs -contains $entry) {
-            return $true
+            return $entry
         }
     }
-    return $false
+    return $null
+}
+
+function Test-OnRequiredNetwork {
+    if (-not $RouterMac) { return $true }
+    return ($null -ne (Get-ApplicableRouterMac))
 }
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
@@ -227,22 +234,33 @@ function Test-AnyActive {
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
-$active   = $false
-$lastSent = [datetime]::MinValue
+$active           = $false
+$lastSent         = [datetime]::MinValue
+$networkApplicable = $null  # $null = unknown; $true or $false once determined
 
 Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $($RouterMac ? $RouterMac : 'any'))"
 
 while ($true) {
     $now = [datetime]::UtcNow
 
-    if (-not (Test-OnRequiredNetwork)) {
-        if ($active) {
-            Send-Notification "off"
-            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') OFF (left network)"
-            $active = $false
+    if ($RouterMac) {
+        $matchedMac = Get-ApplicableRouterMac
+        if ($null -eq $matchedMac) {
+            if ($networkApplicable -ne $false) {
+                Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') No applicable network found. No checks will be done until an applicable network is joined"
+                $networkApplicable = $false
+            }
+            if ($active) {
+                Send-Notification "off"
+                Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') OFF (left network)"
+                $active = $false
+            }
+            Start-Sleep -Seconds $PollSeconds
+            continue
+        } elseif ($networkApplicable -ne $true) {
+            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') Discovered applicable network with router mac address $matchedMac"
+            $networkApplicable = $true
         }
-        Start-Sleep -Seconds $PollSeconds
-        continue
     }
 
     if (Test-AnyActive) {
