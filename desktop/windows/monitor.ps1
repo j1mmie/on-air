@@ -251,7 +251,7 @@ $detectedApp       = $null   # last app logged as detected
 
 Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $($RouterMac ? $RouterMac : 'any'))"
 
-while ($true) {
+try { while ($true) {
     $now = [datetime]::UtcNow
 
     if ($RouterMac) {
@@ -296,4 +296,4 @@ while ($true) {
     }
 
     Start-Sleep -Seconds $PollSeconds
-}
+} } finally { Log "Shutting down" }

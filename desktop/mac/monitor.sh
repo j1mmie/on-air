@@ -132,6 +132,9 @@ get_active_app() {
 
 log() { echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"; }
 
+shutdown() { log "Shutting down"; exit 0; }
+trap shutdown SIGTERM SIGINT SIGHUP
+
 # ── Main loop ────────────────────────────────────────────────────────────────
 
 active=false
