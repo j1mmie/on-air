@@ -1,11 +1,12 @@
-# Monitors Discord voice and Zoom audio, updating the on-air indicator for each.
-# Each app is tracked independently so they don't interfere with each other.
+# Monitors Discord voice and Zoom audio, updating the on-air indicator.
+# Checks Discord first; skips Zoom if Discord is already active.
 #
 # Detection uses the Windows Audio Session API (WASAPI) to find which process
 # PIDs have active audio sessions, matched against Discord/Zoom process IDs.
 #
 # Usage:
 #   $env:SERVER_URL = "http://192.168.1.1:5000"
+#   $env:NAME = "Ashley"
 #   .\monitor.ps1
 #
 # To allow running unsigned scripts:
@@ -13,6 +14,7 @@
 
 param(
     [string]$ServerUrl    = ($env:SERVER_URL ?? "http://192.168.1.1:5000"),
+    [string]$Name         = ($env:NAME       ?? "desktop"),
     [int]   $PollSeconds  = 5,
     [int]   $RenewSeconds = 60
 )
@@ -146,12 +148,12 @@ function Test-ProcessHasAudio([string[]]$Names) {
     return $false
 }
 
-function Send-Notification([string]$State, [string]$Name) {
+function Send-Notification([string]$State) {
     try {
         $null = Invoke-WebRequest -Uri "${ServerUrl}/${State}?name=${Name}" `
             -Method Get -UseBasicParsing -TimeoutSec 5
     } catch {
-        Write-Warning "${Name}: request failed — $_"
+        Write-Warning "Request failed: $_"
     }
 }
 
@@ -167,40 +169,35 @@ function Test-ZoomActive {
     Test-ProcessHasAudio "CptHost", "Zoom"
 }
 
-# ── Core ─────────────────────────────────────────────────────────────────────
-
-# Invoke-AppCheck tracks per-app state in $AppStates and handles on/off/renew.
-function Invoke-AppCheck([string]$Name, [scriptblock]$Test, [hashtable]$AppStates) {
-    $s   = $AppStates[$Name]
-    $now = [datetime]::UtcNow
-
-    if (& $Test) {
-        if (-not $s.Active -or ($now - $s.LastSent).TotalSeconds -ge $RenewSeconds) {
-            Send-Notification "on" $Name
-            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') $Name ON"
-            $s.Active   = $true
-            $s.LastSent = $now
-        }
-    } else {
-        if ($s.Active) {
-            Send-Notification "off" $Name
-            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') $Name OFF"
-            $s.Active = $false
-        }
-    }
+function Test-AnyActive {
+    # Short-circuits: Zoom is not checked if Discord is already active
+    Test-DiscordActive -or Test-ZoomActive
 }
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
-$state = @{
-    discord = @{ Active = $false; LastSent = [datetime]::MinValue }
-    zoom    = @{ Active = $false; LastSent = [datetime]::MinValue }
-}
+$active   = $false
+$lastSent = [datetime]::MinValue
 
-Write-Host "Monitoring Discord and Zoom (server: $ServerUrl)"
+Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name)"
 
 while ($true) {
-    Invoke-AppCheck "discord" { Test-DiscordActive } $state
-    Invoke-AppCheck "zoom"    { Test-ZoomActive    } $state
+    $now = [datetime]::UtcNow
+
+    if (Test-AnyActive) {
+        if (-not $active -or ($now - $lastSent).TotalSeconds -ge $RenewSeconds) {
+            Send-Notification "on"
+            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') ON"
+            $active   = $true
+            $lastSent = $now
+        }
+    } else {
+        if ($active) {
+            Send-Notification "off"
+            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') OFF"
+            $active = $false
+        }
+    }
+
     Start-Sleep -Seconds $PollSeconds
 }
