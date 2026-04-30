@@ -75,7 +75,21 @@ get_router_mac() {
 }
 
 is_on_required_network() {
-    [[ -z "$ROUTER_MAC" || "$(get_router_mac)" == "$ROUTER_MAC" ]]
+    [[ -z "$ROUTER_MAC" ]] && return 0
+
+    local current_mac entry
+    current_mac=$(get_router_mac)
+
+    IFS=',' read -ra entries <<< "$ROUTER_MAC"
+    for entry in "${entries[@]}"; do
+        entry="${entry// /}"
+        if [[ "$entry" == "lan" ]]; then
+            route -n get default &>/dev/null && return 0
+        elif [[ "$entry" == "$current_mac" ]]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 # ── App detection ────────────────────────────────────────────────────────────

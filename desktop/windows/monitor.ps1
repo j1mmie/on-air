@@ -159,7 +159,17 @@ function Get-RouterMac {
 }
 
 function Test-OnRequiredNetwork {
-    -not $RouterMac -or (Get-RouterMac) -eq $RouterMac
+    if (-not $RouterMac) { return $true }
+
+    $currentMac = Get-RouterMac
+    foreach ($entry in ($RouterMac -split ',' | ForEach-Object { $_.Trim() })) {
+        if ($entry -eq 'lan') {
+            if (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue) { return $true }
+        } elseif ($entry -eq $currentMac) {
+            return $true
+        }
+    }
+    return $false
 }
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
