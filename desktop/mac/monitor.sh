@@ -35,8 +35,8 @@
 #        <key>NAME</key>
 #        <string>Ashley</string>
 #
-#        <key>WIFI_NETWORK</key>
-#        <string>LilPuddin</string>
+#        <key>ROUTER_MAC</key>
+#        <string>a4:3e:51:00:00:00</string>
 #      </dict>
 #
 #      <!-- This is the user who runs the script -->
@@ -67,22 +67,20 @@
 
 SERVER_URL="${SERVER_URL:-http://192.168.1.1:5000}"
 NAME="${NAME:-desktop}"
-WIFI_NETWORK="${WIFI_NETWORK:-LilPuddin}"
+ROUTER_MAC="${ROUTER_MAC:-}"
 POLL_INTERVAL=5
 RENEW_INTERVAL=60
 
 # ── Network check ────────────────────────────────────────────────────────────
 
-get_wifi_ssid() {
-    local iface user
-    iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2}')
-    user=$(stat -f "%Su" /dev/console)
-    su "$user" -c "networksetup -getairportnetwork $iface" 2>/dev/null \
-        | sed 's/Current Wi-Fi Network: //'
+get_router_mac() {
+    local gateway
+    gateway=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}')
+    arp -n "$gateway" 2>/dev/null | awk '{print $4}'
 }
 
 is_on_required_network() {
-    [[ "$(get_wifi_ssid)" == "$WIFI_NETWORK" ]]
+    [[ -z "$ROUTER_MAC" || "$(get_router_mac)" == "$ROUTER_MAC" ]]
 }
 
 # ── App detection ────────────────────────────────────────────────────────────
@@ -106,7 +104,7 @@ is_any_active() {
 active=false
 last_sent=0
 
-echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, network: ${WIFI_NETWORK})"
+echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, router: ${ROUTER_MAC:-any})"
 
 while true; do
     now=$(date +%s)

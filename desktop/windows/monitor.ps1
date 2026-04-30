@@ -17,7 +17,7 @@
 # 2. Store your settings as user environment variables (survives reboots):
 #      [Environment]::SetEnvironmentVariable("SERVER_URL",   "http://192.168.1.1:5000", "User")
 #      [Environment]::SetEnvironmentVariable("NAME",         "Ashley",                  "User")
-#      [Environment]::SetEnvironmentVariable("WIFI_NETWORK", "LilPuddin",               "User")
+#      [Environment]::SetEnvironmentVariable("ROUTER_MAC",   "a4:3e:51:00:00:00",       "User")
 #
 # 3. Register the scheduled task (runs at login, stays running):
 #      $script  = "$HOME\path\to\on-air\desktop\windows\monitor.ps1"
@@ -34,9 +34,9 @@
 # To remove:     Unregister-ScheduledTask -TaskName "OnAirMonitor" -Confirm:$false
 
 param(
-    [string]$ServerUrl    = ($env:SERVER_URL    ?? "http://192.168.1.1:5000"),
-    [string]$Name         = ($env:NAME          ?? "desktop"),
-    [string]$WifiNetwork  = ($env:WIFI_NETWORK  ?? "LilPuddin"),
+    [string]$ServerUrl  = ($env:SERVER_URL  ?? "http://192.168.1.1:5000"),
+    [string]$Name       = ($env:NAME        ?? "desktop"),
+    [string]$RouterMac  = ($env:ROUTER_MAC  ?? ""),
     [int]   $PollSeconds  = 5,
     [int]   $RenewSeconds = 60
 )
@@ -149,14 +149,17 @@ public static class Wasapi {
 
 # ── Network check ───────────────────────────────────────────────────────────
 
-function Get-WifiSsid {
-    (netsh wlan show interfaces) -match '^\s+SSID\s+:' |
-        ForEach-Object { ($_ -split ':\s+', 2)[1].Trim() } |
-        Select-Object -First 1
+function Get-RouterMac {
+    $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' |
+        Sort-Object RouteMetric | Select-Object -First 1).NextHop
+    $entry = arp -a $gateway | Where-Object { $_ -match [regex]::Escape($gateway) }
+    if ($entry -match '(([0-9a-f]{2}-){5}[0-9a-f]{2})') {
+        ($Matches[1] -replace '-', ':').ToLower()
+    }
 }
 
 function Test-OnRequiredNetwork {
-    (Get-WifiSsid) -eq $WifiNetwork
+    -not $RouterMac -or (Get-RouterMac) -eq $RouterMac
 }
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
@@ -213,7 +216,7 @@ function Test-AnyActive {
 $active   = $false
 $lastSent = [datetime]::MinValue
 
-Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, network: $WifiNetwork)"
+Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $($RouterMac ? $RouterMac : 'any'))"
 
 while ($true) {
     $now = [datetime]::UtcNow
