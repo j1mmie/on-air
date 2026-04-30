@@ -52,8 +52,7 @@ RENEW_INTERVAL=60
 # ── Network check ────────────────────────────────────────────────────────────
 
 get_wifi_ssid() {
-    /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I 2>/dev/null \
-        | awk -F': ' '/^ *SSID/{print $2}'
+    wdutil info 2>/dev/null | awk -F': ' '/^ *SSID/{print $2; exit}'
 }
 
 is_on_required_network() {
