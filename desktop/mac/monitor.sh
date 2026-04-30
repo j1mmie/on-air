@@ -123,6 +123,10 @@ is_any_active() {
     is_discord_active || is_zoom_active
 }
 
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+log() { echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"; }
+
 # ── Main loop ────────────────────────────────────────────────────────────────
 
 active=false
@@ -138,13 +142,13 @@ while true; do
         matched_mac=$(get_applicable_router_mac)
         if [[ -z "$matched_mac" ]]; then
             if [[ "$network_applicable" != "false" ]]; then
-                echo "$(date '+%Y-%m-%dT%H:%M:%S') No applicable network found. No checks will be done until an applicable network is joined"
+                log "No applicable network found. No checks will be done until an applicable network is joined"
                 network_applicable="false"
             fi
             sleep $POLL_INTERVAL
             continue
         elif [[ "$network_applicable" != "true" ]]; then
-            echo "$(date '+%Y-%m-%dT%H:%M:%S') Discovered applicable network with router mac address $matched_mac"
+            log "Discovered applicable network with router mac address $matched_mac"
             network_applicable="true"
         fi
     fi
@@ -152,14 +156,14 @@ while true; do
     if is_any_active; then
         if [[ "$active" != true || $((now - last_sent)) -ge $RENEW_INTERVAL ]]; then
             curl -sf "${SERVER_URL}/on?name=${NAME}" > /dev/null \
-                && echo "$(date '+%Y-%m-%dT%H:%M:%S') ON"
+                && log "ON"
             active=true
             last_sent=$now
         fi
     else
         if [[ "$active" == true ]]; then
             curl -sf "${SERVER_URL}/off?name=${NAME}" > /dev/null \
-                && echo "$(date '+%Y-%m-%dT%H:%M:%S') OFF"
+                && log "OFF"
             active=false
         fi
     fi

@@ -232,6 +232,10 @@ function Test-AnyActive {
     Test-DiscordActive -or Test-ZoomActive
 }
 
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+function Log([string]$Message) { Log "$Message" }
+
 # ── Main loop ────────────────────────────────────────────────────────────────
 
 $active           = $false
@@ -247,18 +251,18 @@ while ($true) {
         $matchedMac = Get-ApplicableRouterMac
         if ($null -eq $matchedMac) {
             if ($networkApplicable -ne $false) {
-                Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') No applicable network found. No checks will be done until an applicable network is joined"
+                Log "No applicable network found. No checks will be done until an applicable network is joined"
                 $networkApplicable = $false
             }
             if ($active) {
                 Send-Notification "off"
-                Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') OFF (left network)"
+                Log "OFF (left network)"
                 $active = $false
             }
             Start-Sleep -Seconds $PollSeconds
             continue
         } elseif ($networkApplicable -ne $true) {
-            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') Discovered applicable network with router mac address $matchedMac"
+            Log "Discovered applicable network with router mac address $matchedMac"
             $networkApplicable = $true
         }
     }
@@ -266,14 +270,14 @@ while ($true) {
     if (Test-AnyActive) {
         if (-not $active -or ($now - $lastSent).TotalSeconds -ge $RenewSeconds) {
             Send-Notification "on"
-            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') ON"
+            Log "ON"
             $active   = $true
             $lastSent = $now
         }
     } else {
         if ($active) {
             Send-Notification "off"
-            Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') OFF"
+            Log "OFF"
             $active = $false
         }
     }
