@@ -70,7 +70,7 @@ RENEW_INTERVAL=60
 
 get_router_mac() {
     local gateway
-    gateway=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}')
+    gateway=$(ipconfig getoption en0 router 2>/dev/null)
     arp -n "$gateway" 2>/dev/null | awk '{print $4}'
 }
 
