@@ -78,7 +78,6 @@ get_wifi_ssid() {
 }
 
 is_on_required_network() {
-    echo "network: $(get_wifi_ssid)"
     [[ "$(get_wifi_ssid)" == "$WIFI_NETWORK" ]]
 }
 
@@ -106,7 +105,6 @@ last_sent=0
 echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, network: ${WIFI_NETWORK})"
 
 while true; do
-    echo "hello"
     now=$(date +%s)
 
     if ! is_on_required_network; then
