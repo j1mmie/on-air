@@ -74,9 +74,11 @@ RENEW_INTERVAL=60
 # ── Network check ────────────────────────────────────────────────────────────
 
 get_wifi_ssid() {
-    local iface
+    local iface user
     iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2}')
-    networksetup -getairportnetwork "$iface" 2>/dev/null | sed 's/Current Wi-Fi Network: //'
+    user=$(stat -f "%Su" /dev/console)
+    su "$user" -c "networksetup -getairportnetwork $iface" 2>/dev/null \
+        | sed 's/Current Wi-Fi Network: //'
 }
 
 is_on_required_network() {
