@@ -68,25 +68,31 @@ RENEW_INTERVAL=60
 
 # ── Network check ────────────────────────────────────────────────────────────
 
-get_router_mac() {
-    local gateway
-    gateway=$(ipconfig getoption en0 router 2>/dev/null)
-    arp -n "$gateway" 2>/dev/null | awk '{print $4}'
+get_router_macs() {
+    local iface gateway mac
+    while IFS= read -r iface; do
+        gateway=$(ipconfig getoption "$iface" router 2>/dev/null)
+        [[ -z "$gateway" ]] && continue
+        mac=$(arp -n "$gateway" 2>/dev/null | awk '{print $4}')
+        [[ -n "$mac" ]] && echo "$mac"
+    done < <(networksetup -listallhardwareports | awk '/Device:/{print $2}')
 }
 
 is_on_required_network() {
     [[ -z "$ROUTER_MAC" ]] && return 0
 
-    local current_mac entry
-    current_mac=$(get_router_mac)
+    local current_macs entry mac
+    current_macs=$(get_router_macs)
 
     IFS=',' read -ra entries <<< "$ROUTER_MAC"
     for entry in "${entries[@]}"; do
         entry="${entry// /}"
         if [[ "$entry" == "lan" ]]; then
-            route -n get default &>/dev/null && return 0
-        elif [[ "$entry" == "$current_mac" ]]; then
-            return 0
+            [[ -n "$current_macs" ]] && return 0
+        else
+            while IFS= read -r mac; do
+                [[ "$entry" == "$mac" ]] && return 0
+            done <<< "$current_macs"
         fi
     done
     return 1

@@ -149,23 +149,25 @@ public static class Wasapi {
 
 # ── Network check ───────────────────────────────────────────────────────────
 
-function Get-RouterMac {
-    $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' |
-        Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    $entry = arp -a $gateway | Where-Object { $_ -match [regex]::Escape($gateway) }
-    if ($entry -match '(([0-9a-f]{2}-){5}[0-9a-f]{2})') {
-        ($Matches[1] -replace '-', ':').ToLower()
+function Get-RouterMacs {
+    $gateways = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue).NextHop |
+        Select-Object -Unique
+    foreach ($gateway in $gateways) {
+        $entry = arp -a $gateway | Where-Object { $_ -match [regex]::Escape($gateway) }
+        if ($entry -match '(([0-9a-f]{2}-){5}[0-9a-f]{2})') {
+            ($Matches[1] -replace '-', ':').ToLower()
+        }
     }
 }
 
 function Test-OnRequiredNetwork {
     if (-not $RouterMac) { return $true }
 
-    $currentMac = Get-RouterMac
+    $currentMacs = @(Get-RouterMacs)
     foreach ($entry in ($RouterMac -split ',' | ForEach-Object { $_.Trim() })) {
         if ($entry -eq 'lan') {
-            if (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue) { return $true }
-        } elseif ($entry -eq $currentMac) {
+            if ($currentMacs.Count -gt 0) { return $true }
+        } elseif ($currentMacs -contains $entry) {
             return $true
         }
     }
