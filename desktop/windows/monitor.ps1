@@ -150,8 +150,10 @@ public static class Wasapi {
 # ── Network check ───────────────────────────────────────────────────────────
 
 function Get-RouterMacs {
-    $gateways = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue).NextHop |
-        Select-Object -Unique
+    $ifIndices = (Get-NetAdapter |
+        Where-Object { $_.MediaType -in '802.3', 'Native 802.11' -and $_.Status -eq 'Up' }).ifIndex
+    $gateways = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+        Where-Object { $_.ifIndex -in $ifIndices }).NextHop | Select-Object -Unique
     foreach ($gateway in $gateways) {
         $entry = arp -a $gateway | Where-Object { $_ -match [regex]::Escape($gateway) }
         if ($entry -match '(([0-9a-f]{2}-){5}[0-9a-f]{2})') {

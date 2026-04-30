@@ -75,7 +75,7 @@ get_router_macs() {
         [[ -z "$gateway" ]] && continue
         mac=$(arp -n "$gateway" 2>/dev/null | awk '{print $4}')
         [[ -n "$mac" ]] && echo "$mac"
-    done < <(networksetup -listallhardwareports | awk '/Device:/{print $2}')
+    done < <(networksetup -listallhardwareports | awk '/Hardware Port: (Ethernet|Wi-Fi)/{getline; print $2}')
 }
 
 is_on_required_network() {
