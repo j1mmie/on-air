@@ -36,7 +36,7 @@
 #        <string>Ashley</string>
 #
 #        <key>ROUTER_MAC</key>
-#        <string>a4:3e:51:00:00:00</string>
+#        <string>4c:1:43:8e:76:82</string>
 #      </dict>
 #
 #      <key>RunAtLoad</key>
@@ -105,11 +105,6 @@ while true; do
     now=$(date +%s)
 
     if ! is_on_required_network; then
-        if [[ "$active" == true ]]; then
-            curl -sf "${SERVER_URL}/off?name=${NAME}" > /dev/null \
-                && echo "$(date '+%Y-%m-%dT%H:%M:%S') OFF (left network)"
-            active=false
-        fi
         sleep $POLL_INTERVAL
         continue
     fi
