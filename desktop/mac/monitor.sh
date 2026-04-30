@@ -18,23 +18,43 @@
 #      "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 #    <plist version="1.0">
 #    <dict>
-#      <key>Label</key>             <string>on-air-monitor</string>
+#      <key>Label</key>
+#      <string>on-air-monitor</string>
+#
 #      <key>ProgramArguments</key>
 #      <array>
 #        <string>/bin/bash</string>
 #        <string>/path/to/on-air/desktop/mac/monitor.sh</string>
 #      </array>
+#
 #      <key>EnvironmentVariables</key>
 #      <dict>
-#        <key>SERVER_URL</key>    <string>http://192.168.1.1:5000</string>
-#        <key>NAME</key>          <string>Ashley</string>
-#        <key>WIFI_NETWORK</key>  <string>LilPuddin</string>
+#        <key>SERVER_URL</key>
+#        <string>http://192.168.4.234:5000</string>
+#
+#        <key>NAME</key>
+#        <string>Ashley</string>
+#
+#        <key>WIFI_NETWORK</key>
+#        <string>LilPuddin</string>
 #      </dict>
-#      <key>UserName</key>         <string>root</string>
-#      <key>RunAtLoad</key>  <true/>
-#      <key>KeepAlive</key>  <true/>
-#      <key>StandardOutPath</key> <string>/tmp/on-air-monitor.log</string>
-#      <key>StandardErrorPath</key><string>/tmp/on-air-monitor.log</string>
+#
+#      <!-- This is the user who runs the script -->
+#      <!-- not to be confused with the NAME env var -->
+#      <key>UserName</key>
+#      <string>root</string>
+#
+#      <key>RunAtLoad</key>
+#      <true/>
+#
+#      <key>KeepAlive</key>
+#      <true/>
+#
+#      <key>StandardOutPath</key> 
+#      <string>/tmp/on-air-monitor.log</string>
+#
+#      <key>StandardErrorPath</key>
+#      <string>/tmp/on-air-monitor.log</string>
 #    </dict>
 #    </plist>
 #
@@ -58,6 +78,7 @@ get_wifi_ssid() {
 }
 
 is_on_required_network() {
+    echo "network: $(get_wifi_ssid)"
     [[ "$(get_wifi_ssid)" == "$WIFI_NETWORK" ]]
 }
 
@@ -85,6 +106,7 @@ last_sent=0
 echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, network: ${WIFI_NETWORK})"
 
 while true; do
+    echo "hello"
     now=$(date +%s)
 
     if ! is_on_required_network; then
