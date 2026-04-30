@@ -7,6 +7,40 @@
 #
 # Or export vars from settings.toml first:
 #   export $(grep -v '^#' ../settings.toml | xargs) && ./monitor.sh
+#
+# ── Startup (launchd) ────────────────────────────────────────────────────────
+#
+# 1. Create ~/Library/LaunchAgents/on-air-monitor.plist with these contents,
+#    updating the script path, SERVER_URL, and NAME:
+#
+#    <?xml version="1.0" encoding="UTF-8"?>
+#    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+#      "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+#    <plist version="1.0">
+#    <dict>
+#      <key>Label</key>             <string>on-air-monitor</string>
+#      <key>ProgramArguments</key>
+#      <array>
+#        <string>/bin/bash</string>
+#        <string>/path/to/on-air/desktop/mac/monitor.sh</string>
+#      </array>
+#      <key>EnvironmentVariables</key>
+#      <dict>
+#        <key>SERVER_URL</key> <string>http://192.168.1.1:5000</string>
+#        <key>NAME</key>       <string>Ashley</string>
+#      </dict>
+#      <key>RunAtLoad</key>  <true/>
+#      <key>KeepAlive</key>  <true/>
+#      <key>StandardOutPath</key> <string>/tmp/on-air-monitor.log</string>
+#      <key>StandardErrorPath</key><string>/tmp/on-air-monitor.log</string>
+#    </dict>
+#    </plist>
+#
+# 2. Load it:
+#      launchctl load ~/Library/LaunchAgents/on-air-monitor.plist
+#
+# To stop:    launchctl unload ~/Library/LaunchAgents/on-air-monitor.plist
+# To view log: tail -f /tmp/on-air-monitor.log
 
 SERVER_URL="${SERVER_URL:-http://192.168.1.1:5000}"
 NAME="${NAME:-desktop}"

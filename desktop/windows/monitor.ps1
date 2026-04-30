@@ -9,8 +9,28 @@
 #   $env:NAME = "Ashley"
 #   .\monitor.ps1
 #
-# To allow running unsigned scripts:
-#   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+# ── Startup (Task Scheduler) ─────────────────────────────────────────────────
+#
+# 1. Allow the script to run (once, in an elevated PowerShell):
+#      Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+#
+# 2. Store your settings as user environment variables (survives reboots):
+#      [Environment]::SetEnvironmentVariable("SERVER_URL", "http://192.168.1.1:5000", "User")
+#      [Environment]::SetEnvironmentVariable("NAME", "Ashley", "User")
+#
+# 3. Register the scheduled task (runs at login, stays running):
+#      $script  = "$HOME\path\to\on-air\desktop\windows\monitor.ps1"
+#      $action  = New-ScheduledTaskAction -Execute "powershell.exe" `
+#                   -Argument "-NonInteractive -WindowStyle Hidden -File `"$script`""
+#      $trigger = New-ScheduledTaskTrigger -AtLogOn
+#      $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 `
+#                    -RestartInterval (New-TimeSpan -Minutes 1)
+#      Register-ScheduledTask -TaskName "OnAirMonitor" -Action $action `
+#                             -Trigger $trigger -Settings $settings
+#
+# To start now:  Start-ScheduledTask  -TaskName "OnAirMonitor"
+# To stop:       Stop-ScheduledTask   -TaskName "OnAirMonitor"
+# To remove:     Unregister-ScheduledTask -TaskName "OnAirMonitor" -Confirm:$false
 
 param(
     [string]$ServerUrl    = ($env:SERVER_URL ?? "http://192.168.1.1:5000"),
