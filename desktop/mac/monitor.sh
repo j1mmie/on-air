@@ -74,7 +74,9 @@ RENEW_INTERVAL=60
 # ── Network check ────────────────────────────────────────────────────────────
 
 get_wifi_ssid() {
-    wdutil info 2>/dev/null | awk -F': ' '/^ *SSID/{print $2; exit}'
+    local iface
+    iface=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2}')
+    networksetup -getairportnetwork "$iface" 2>/dev/null | sed 's/Current Wi-Fi Network: //'
 }
 
 is_on_required_network() {
