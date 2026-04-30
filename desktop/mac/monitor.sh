@@ -26,8 +26,9 @@
 #      </array>
 #      <key>EnvironmentVariables</key>
 #      <dict>
-#        <key>SERVER_URL</key> <string>http://192.168.1.1:5000</string>
-#        <key>NAME</key>       <string>Ashley</string>
+#        <key>SERVER_URL</key>    <string>http://192.168.1.1:5000</string>
+#        <key>NAME</key>          <string>Ashley</string>
+#        <key>WIFI_NETWORK</key>  <string>LilPuddin</string>
 #      </dict>
 #      <key>RunAtLoad</key>  <true/>
 #      <key>KeepAlive</key>  <true/>
@@ -44,8 +45,20 @@
 
 SERVER_URL="${SERVER_URL:-http://192.168.1.1:5000}"
 NAME="${NAME:-desktop}"
+WIFI_NETWORK="${WIFI_NETWORK:-LilPuddin}"
 POLL_INTERVAL=5
 RENEW_INTERVAL=60
+
+# ── Network check ────────────────────────────────────────────────────────────
+
+get_wifi_ssid() {
+    /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I 2>/dev/null \
+        | awk -F': ' '/^ *SSID/{print $2}'
+}
+
+is_on_required_network() {
+    [[ "$(get_wifi_ssid)" == "$WIFI_NETWORK" ]]
+}
 
 # ── App detection ────────────────────────────────────────────────────────────
 
@@ -68,10 +81,20 @@ is_any_active() {
 active=false
 last_sent=0
 
-echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME})"
+echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, network: ${WIFI_NETWORK})"
 
 while true; do
     now=$(date +%s)
+
+    if ! is_on_required_network; then
+        if [[ "$active" == true ]]; then
+            curl -sf "${SERVER_URL}/off?name=${NAME}" > /dev/null \
+                && echo "$(date '+%Y-%m-%dT%H:%M:%S') OFF (left network)"
+            active=false
+        fi
+        sleep $POLL_INTERVAL
+        continue
+    fi
 
     if is_any_active; then
         if [[ "$active" != true || $((now - last_sent)) -ge $RENEW_INTERVAL ]]; then
