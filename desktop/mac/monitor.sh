@@ -123,6 +123,11 @@ is_any_active() {
     is_discord_active || is_zoom_active
 }
 
+get_active_app() {
+    is_discord_active && { echo "Discord"; return; }
+    is_zoom_active    && { echo "Zoom"; return; }
+}
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 log() { echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"; }
@@ -132,6 +137,7 @@ log() { echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"; }
 active=false
 last_sent=0
 network_applicable=""  # empty = unknown; "true" or "false" once determined
+detected_app=""        # last app logged as detected
 
 echo "Monitoring Discord and Zoom (server: ${SERVER_URL}, name: ${NAME}, router: ${ROUTER_MAC:-any})"
 
@@ -153,17 +159,23 @@ while true; do
         fi
     fi
 
-    if is_any_active; then
+    current_app=$(get_active_app)
+    if [[ -n "$current_app" ]]; then
+        if [[ "$current_app" != "$detected_app" ]]; then
+            log "Detected $current_app usage"
+            detected_app="$current_app"
+        fi
         if [[ "$active" != true || $((now - last_sent)) -ge $RENEW_INTERVAL ]]; then
             curl -sf "${SERVER_URL}/on?name=${NAME}" > /dev/null \
-                && log "ON"
+                && log "Sending ON signal to Display"
             active=true
             last_sent=$now
         fi
     else
+        detected_app=""
         if [[ "$active" == true ]]; then
             curl -sf "${SERVER_URL}/off?name=${NAME}" > /dev/null \
-                && log "OFF"
+                && log "Sending OFF signal to Display"
             active=false
         fi
     fi

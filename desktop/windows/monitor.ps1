@@ -232,15 +232,22 @@ function Test-AnyActive {
     Test-DiscordActive -or Test-ZoomActive
 }
 
+function Get-ActiveApp {
+    if (Test-DiscordActive) { return "Discord" }
+    if (Test-ZoomActive)    { return "Zoom" }
+    return $null
+}
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-function Log([string]$Message) { Log "$Message" }
+function Log([string]$Message) { Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') $Message" }
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
-$active           = $false
-$lastSent         = [datetime]::MinValue
-$networkApplicable = $null  # $null = unknown; $true or $false once determined
+$active            = $false
+$lastSent          = [datetime]::MinValue
+$networkApplicable = $null   # $null = unknown; $true or $false once determined
+$detectedApp       = $null   # last app logged as detected
 
 Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $($RouterMac ? $RouterMac : 'any'))"
 
@@ -256,7 +263,7 @@ while ($true) {
             }
             if ($active) {
                 Send-Notification "off"
-                Log "OFF (left network)"
+                Log "Sending OFF signal to Display (left network)"
                 $active = $false
             }
             Start-Sleep -Seconds $PollSeconds
@@ -267,17 +274,23 @@ while ($true) {
         }
     }
 
-    if (Test-AnyActive) {
+    $currentApp = Get-ActiveApp
+    if ($null -ne $currentApp) {
+        if ($currentApp -ne $detectedApp) {
+            Log "Detected $currentApp usage"
+            $detectedApp = $currentApp
+        }
         if (-not $active -or ($now - $lastSent).TotalSeconds -ge $RenewSeconds) {
             Send-Notification "on"
-            Log "ON"
+            Log "Sending ON signal to Display"
             $active   = $true
             $lastSent = $now
         }
     } else {
+        $detectedApp = $null
         if ($active) {
             Send-Notification "off"
-            Log "OFF"
+            Log "Sending OFF signal to Display"
             $active = $false
         }
     }
