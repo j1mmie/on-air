@@ -5,8 +5,8 @@
 # PIDs have active audio sessions, matched against Discord/Zoom process IDs.
 #
 # Usage:
-#   $env:SERVER_URL = "http://192.168.1.1:5000"
-#   $env:NAME = "Ashley"
+#   $env:ONAIR_SERVER_URL = "http://192.168.1.1:5000"
+#   $env:ONAIR_NAME = "Ashley"
 #   .\monitor.ps1
 #
 # List network adapters and their router MAC addresses (useful during setup):
@@ -18,9 +18,9 @@
 #      Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 #
 # 2. Store your settings as user environment variables (survives reboots):
-#      [Environment]::SetEnvironmentVariable("SERVER_URL",   "http://192.168.1.1:5000", "User")
-#      [Environment]::SetEnvironmentVariable("NAME",         "Ashley",                  "User")
-#      [Environment]::SetEnvironmentVariable("ROUTER_MAC",   "a4:3e:51:00:00:00",       "User")
+#      [Environment]::SetEnvironmentVariable("ONAIR_SERVER_URL",   "http://192.168.1.1:5000", "User")
+#      [Environment]::SetEnvironmentVariable("ONAIR_NAME",         "Ashley",                  "User")
+#      [Environment]::SetEnvironmentVariable("ONAIR_ROUTER_MAC",   "a4:3e:51:00:00:00",       "User")
 #
 # 3. Register the scheduled task (runs at login, stays running):
 #      $script  = "$HOME\path\to\on-air\desktop\windows\monitor.ps1"
@@ -37,9 +37,9 @@
 # To remove:     Unregister-ScheduledTask -TaskName "OnAirMonitor" -Confirm:$false
 
 param(
-    [string]$ServerUrl    = $env:SERVER_URL,
-    [string]$Name         = $env:NAME,
-    [string]$RouterMac    = $env:ROUTER_MAC,
+    [string]$ServerUrl    = $env:ONAIR_SERVER_URL,
+    [string]$Name         = $env:ONAIR_NAME,
+    [string]$RouterMac    = $env:ONAIR_ROUTER_MAC,
     [int]   $PollSeconds  = 5,
     [int]   $RenewSeconds = 60,
     [switch]$ListNetworks

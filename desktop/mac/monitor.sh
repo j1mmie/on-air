@@ -3,12 +3,12 @@
 # Checks Discord first; skips Zoom if Discord is already active.
 #
 # Usage:
-#   SERVER_URL=http://192.168.1.1:5000 NAME=Ashley ./monitor.sh
+#   ONAIR_SERVER_URL=http://192.168.1.1:5000 ONAIR_NAME=Ashley ./monitor.sh
 #
 # List network adapters and their router MAC addresses (useful during setup):
 #   ./monitor.sh --list-networks
 #
-# Or export vars from settings.toml first:
+# Or export vars from settings.toml first (keys must use ONAIR_ prefix):
 #   export $(grep -v '^#' ../settings.toml | xargs) && ./monitor.sh
 #
 # ── Startup (launchd) ────────────────────────────────────────────────────────
@@ -32,13 +32,13 @@
 #
 #      <key>EnvironmentVariables</key>
 #      <dict>
-#        <key>SERVER_URL</key>
+#        <key>ONAIR_SERVER_URL</key>
 #        <string>http://192.168.4.234:5000</string>
 #
-#        <key>NAME</key>
+#        <key>ONAIR_NAME</key>
 #        <string>Ashley</string>
 #
-#        <key>ROUTER_MAC</key>
+#        <key>ONAIR_ROUTER_MAC</key>
 #        <string>4c:1:43:8e:76:82</string>
 #      </dict>
 #
@@ -63,9 +63,9 @@
 # To check:    launchctl list | grep on-air-monitor
 # To view log: tail -f /tmp/on-air-monitor.log
 
-SERVER_URL="${SERVER_URL:-http://192.168.1.1:5000}"
-NAME="${NAME:-desktop}"
-ROUTER_MAC="${ROUTER_MAC:-}"
+SERVER_URL="${ONAIR_SERVER_URL:-http://192.168.1.1:5000}"
+NAME="${ONAIR_NAME:-desktop}"
+ROUTER_MAC="${ONAIR_ROUTER_MAC:-}"
 POLL_INTERVAL=5
 RENEW_INTERVAL=60
 
