@@ -9,6 +9,9 @@
 #   $env:NAME = "Ashley"
 #   .\monitor.ps1
 #
+# List network adapters and their router MAC addresses (useful during setup):
+#   .\monitor.ps1 -ListNetworks
+#
 # ── Startup (Task Scheduler) ─────────────────────────────────────────────────
 #
 # 1. Allow the script to run (once, in an elevated PowerShell):
@@ -34,12 +37,16 @@
 # To remove:     Unregister-ScheduledTask -TaskName "OnAirMonitor" -Confirm:$false
 
 param(
-    [string]$ServerUrl  = ($env:SERVER_URL  ?? "http://192.168.1.1:5000"),
-    [string]$Name       = ($env:NAME        ?? "desktop"),
-    [string]$RouterMac  = ($env:ROUTER_MAC  ?? ""),
+    [string]$ServerUrl    = $env:SERVER_URL,
+    [string]$Name         = $env:NAME,
+    [string]$RouterMac    = $env:ROUTER_MAC,
     [int]   $PollSeconds  = 5,
-    [int]   $RenewSeconds = 60
+    [int]   $RenewSeconds = 60,
+    [switch]$ListNetworks
 )
+
+if (-not $ServerUrl) { $ServerUrl = "http://192.168.1.1:5000" }
+if (-not $Name)      { $Name      = "desktop" }
 
 # ── WASAPI via COM ───────────────────────────────────────────────────────────
 
@@ -162,6 +169,24 @@ function Get-RouterMacs {
     }
 }
 
+function Show-Networks {
+    $adapters = Get-NetAdapter |
+        Where-Object { $_.MediaType -in '802.3', 'Native 802.11' -and $_.Status -eq 'Up' }
+    $found = $false
+    foreach ($adapter in $adapters) {
+        $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ifIndex $adapter.ifIndex `
+            -ErrorAction SilentlyContinue).NextHop
+        if (-not $gateway) { continue }
+        $entry = arp -a $gateway | Where-Object { $_ -match [regex]::Escape($gateway) }
+        if ($entry -match '(([0-9a-f]{2}-){5}[0-9a-f]{2})') {
+            $mac = ($Matches[1] -replace '-', ':').ToLower()
+            Write-Host ("  {0,-20}  gateway: {1,-16}  router mac: {2}" -f $adapter.Name, $gateway, $mac)
+            $found = $true
+        }
+    }
+    if (-not $found) { Write-Host "  (no active network adapters found)" }
+}
+
 # Returns the matched router MAC if on an applicable network, $null otherwise.
 # Returns $null immediately when RouterMac is unset — no filter is configured.
 function Get-ApplicableRouterMac {
@@ -242,6 +267,14 @@ function Get-ActiveApp {
 
 function Log([string]$Message) { Write-Host "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') $Message" }
 
+# ── List networks mode ───────────────────────────────────────────────────────
+
+if ($ListNetworks) {
+    Write-Host "Active network adapters and router MAC addresses:"
+    Show-Networks
+    exit
+}
+
 # ── Main loop ────────────────────────────────────────────────────────────────
 
 $active            = $false
@@ -249,7 +282,8 @@ $lastSent          = [datetime]::MinValue
 $networkApplicable = $null   # $null = unknown; $true or $false once determined
 $detectedApp       = $null   # last app logged as detected
 
-Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $($RouterMac ? $RouterMac : 'any'))"
+$routerDisplay = if ($RouterMac) { $RouterMac } else { 'any' }
+Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $routerDisplay)"
 
 try { while ($true) {
     $now = [datetime]::UtcNow

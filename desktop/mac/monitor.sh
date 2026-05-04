@@ -5,6 +5,9 @@
 # Usage:
 #   SERVER_URL=http://192.168.1.1:5000 NAME=Ashley ./monitor.sh
 #
+# List network adapters and their router MAC addresses (useful during setup):
+#   ./monitor.sh --list-networks
+#
 # Or export vars from settings.toml first:
 #   export $(grep -v '^#' ../settings.toml | xargs) && ./monitor.sh
 #
@@ -107,6 +110,19 @@ is_on_required_network() {
     get_applicable_router_mac > /dev/null
 }
 
+list_networks() {
+    local any=false iface gateway mac
+    while IFS= read -r iface; do
+        gateway=$(ipconfig getoption "$iface" router 2>/dev/null)
+        [[ -z "$gateway" ]] && continue
+        mac=$(arp -n "$gateway" 2>/dev/null | awk '{print $4}')
+        [[ -z "$mac" ]] && continue
+        printf "  %-12s  gateway: %-16s  router mac: %s\n" "$iface" "$gateway" "$mac"
+        any=true
+    done < <(networksetup -listallhardwareports | awk '/Hardware Port: (Ethernet|Wi-Fi)/{getline; print $2}')
+    $any || echo "  (no active network adapters found)"
+}
+
 # ── App detection ────────────────────────────────────────────────────────────
 
 is_discord_active() {
@@ -134,6 +150,14 @@ log() { echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"; }
 
 shutdown() { log "Shutting down"; exit 0; }
 trap shutdown SIGTERM SIGINT SIGHUP
+
+# ── List networks mode ───────────────────────────────────────────────────────
+
+if [[ "$1" == "--list-networks" ]]; then
+    echo "Active network adapters and router MAC addresses:"
+    list_networks
+    exit 0
+fi
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
