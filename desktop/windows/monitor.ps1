@@ -2,9 +2,9 @@
 # Checks Discord first; skips Zoom if Discord is already active.
 #
 # Detection:
-#   Discord: 2+ distinct Discord PIDs with UDP endpoints signals call start
-#            (WebRTC voice). The voice subprocess PID is then tracked directly;
-#            the call ends when that process exits, not when its UDP socket does.
+#   Discord: Discord Local RPC (IPC) — subscribes to VOICE_CHANNEL_SELECT
+#            events from the running Discord client. Requires a one-time
+#            OAuth consent popup the first time the script runs.
 #   Zoom:    Windows Audio Session API (WASAPI) — CptHost.exe only has an audio
 #            session during an active meeting.
 #
@@ -15,6 +15,19 @@
 #
 # List network adapters and their router MAC addresses (useful during setup):
 #   .\monitor.ps1 -ListNetworks
+#
+# ── Discord IPC setup ────────────────────────────────────────────────────────
+#
+# 1. Go to https://discord.com/developers/applications and create an application.
+# 2. Under OAuth2, add http://localhost as a redirect URI and save.
+# 3. Copy the Client ID (General Information) and Client Secret (OAuth2).
+# 4. Store them as user environment variables:
+#      [Environment]::SetEnvironmentVariable("ONAIR_DISCORD_CLIENT_ID",     "...", "User")
+#      [Environment]::SetEnvironmentVariable("ONAIR_DISCORD_CLIENT_SECRET", "...", "User")
+#
+# On first run, Discord will show a one-time consent popup — click Authorize.
+# The token is saved to %LOCALAPPDATA%\OnAirMonitor\discord_token.json and
+# refreshed automatically; you will not be prompted again.
 #
 # ── Startup (Task Scheduler) ─────────────────────────────────────────────────
 #
@@ -52,11 +65,13 @@
 #   Get-Content "$env:LOCALAPPDATA\OnAirMonitor\monitor.log" -Wait -Tail 20
 
 param(
-    [string]$ServerUrl    = $env:ONAIR_SERVER_URL,
-    [string]$Name         = $env:ONAIR_NAME,
-    [string]$RouterMac    = $env:ONAIR_ROUTER_MAC,
-    [int]   $PollSeconds  = 5,
-    [int]   $RenewSeconds = 60,
+    [string]$ServerUrl           = $env:ONAIR_SERVER_URL,
+    [string]$Name                = $env:ONAIR_NAME,
+    [string]$RouterMac           = $env:ONAIR_ROUTER_MAC,
+    [string]$DiscordClientId     = $env:ONAIR_DISCORD_CLIENT_ID,
+    [string]$DiscordClientSecret = $env:ONAIR_DISCORD_CLIENT_SECRET,
+    [int]   $PollSeconds         = 5,
+    [int]   $RenewSeconds        = 60,
     [switch]$ListNetworks
 )
 
@@ -255,34 +270,163 @@ function Send-Notification([string]$State) {
     }
 }
 
-# ── App detection ────────────────────────────────────────────────────────────
+# ── Discord IPC ──────────────────────────────────────────────────────────────
 
-function Test-DiscordActive {
-    $procs = Get-Process -Name "Discord" -ErrorAction SilentlyContinue
-    if (-not $procs) { $script:discordVoicePid = $null; return $false }
-    $allPids = $procs.Id
+$discordState         = [hashtable]::Synchronized(@{ InCall = $false })
+$tokenPath            = "$env:LOCALAPPDATA\OnAirMonitor\discord_token.json"
+$script:discordIpcJob = $null
 
-    # Once a call is detected, track by process existence — not by UDP socket —
-    # so transient socket recreation mid-call doesn't cause false negatives.
-    if ($null -ne $script:discordVoicePid) {
-        if ($allPids -contains $script:discordVoicePid) { return $true }
-        $script:discordVoicePid = $null  # subprocess exited → call ended
+function Start-DiscordIpcMonitor {
+    if (-not $DiscordClientId -or -not $DiscordClientSecret) {
+        Log "ONAIR_DISCORD_CLIENT_ID or ONAIR_DISCORD_CLIENT_SECRET not set; Discord detection disabled"
+        return
     }
 
-    # Call start: 2+ distinct Discord PIDs with UDP (main process pre-allocates
-    # one socket; voice subprocess opens a second when joining a call).
-    $pidsWithUdp = @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue |
-        Where-Object { $_.OwningProcess -in $allPids } |
-        Select-Object -ExpandProperty OwningProcess -Unique)
-    if ($pidsWithUdp.Count -lt 2) { return $false }
+    $rs = [runspacefactory]::CreateRunspace()
+    $rs.Open()
+    $rs.SessionStateProxy.SetVariable('discordState',  $discordState)
+    $rs.SessionStateProxy.SetVariable('clientId',      $DiscordClientId)
+    $rs.SessionStateProxy.SetVariable('clientSecret',  $DiscordClientSecret)
+    $rs.SessionStateProxy.SetVariable('tokenPath',     $tokenPath)
 
-    # The voice subprocess is the most recently spawned Discord process with UDP.
-    $script:discordVoicePid = ($procs |
-        Where-Object { $_.Id -in $pidsWithUdp } |
-        Sort-Object StartTime -Descending |
-        Select-Object -First 1).Id
-    return $true
+    $ps = [powershell]::Create()
+    $ps.Runspace = $rs
+    $null = $ps.AddScript({
+        function Write-Frame([IO.Stream]$s, [int]$op, [string]$json) {
+            $b = [Text.Encoding]::UTF8.GetBytes($json)
+            $f = [byte[]]::new(8 + $b.Length)
+            [BitConverter]::GetBytes([int32]$op).CopyTo($f, 0)
+            [BitConverter]::GetBytes([int32]$b.Length).CopyTo($f, 4)
+            $b.CopyTo($f, 8)
+            $s.Write($f, 0, $f.Length)
+        }
+
+        function Read-Frame([IO.Stream]$s) {
+            $h = [byte[]]::new(8); $n = 0
+            while ($n -lt 8) {
+                $r = $s.Read($h, $n, 8 - $n)
+                if ($r -le 0) { return $null }
+                $n += $r
+            }
+            $len = [BitConverter]::ToInt32($h, 4)
+            $b = [byte[]]::new($len); $n = 0
+            while ($n -lt $len) {
+                $r = $s.Read($b, $n, $len - $n)
+                if ($r -le 0) { return $null }
+                $n += $r
+            }
+            [Text.Encoding]::UTF8.GetString($b) | ConvertFrom-Json
+        }
+
+        function Send-Cmd([IO.Stream]$s, [string]$cmd, $cmdArgs) {
+            $payload = [pscustomobject]@{
+                cmd   = $cmd
+                args  = $cmdArgs
+                nonce = [guid]::NewGuid().ToString()
+            } | ConvertTo-Json -Compress -Depth 5
+            Write-Frame $s 1 $payload
+        }
+
+        function Get-Token([IO.Stream]$pipe) {
+            # Try stored token
+            if (Test-Path $tokenPath) {
+                $t   = Get-Content $tokenPath -Raw | ConvertFrom-Json
+                $exp = [datetime]::Parse($t.expires_at, $null,
+                           [Globalization.DateTimeStyles]::RoundtripKind)
+                if ($exp -gt [datetime]::UtcNow.AddMinutes(5)) { return $t.access_token }
+                # Try refresh token
+                if ($t.refresh_token) {
+                    try {
+                        $body = "grant_type=refresh_token" +
+                                "&refresh_token=$([uri]::EscapeDataString($t.refresh_token))" +
+                                "&client_id=$clientId" +
+                                "&client_secret=$([uri]::EscapeDataString($clientSecret))"
+                        $r = Invoke-RestMethod 'https://discord.com/api/oauth2/token' `
+                                 -Method Post -Body $body `
+                                 -ContentType 'application/x-www-form-urlencoded'
+                        @{ access_token  = $r.access_token
+                           refresh_token = $r.refresh_token
+                           expires_at    = [datetime]::UtcNow.AddSeconds($r.expires_in).ToString('o')
+                        } | ConvertTo-Json | Set-Content $tokenPath
+                        return $r.access_token
+                    } catch { }
+                }
+            }
+
+            # Full auth — Discord shows a one-time consent popup
+            Send-Cmd $pipe 'AUTHORIZE' @{ client_id = $clientId; scopes = @('rpc') }
+            do { $frame = Read-Frame $pipe } while ($frame -and $frame.cmd -ne 'AUTHORIZE')
+            if (-not $frame) { throw 'Pipe closed during AUTHORIZE' }
+
+            $code = $frame.data.code
+            $body = "grant_type=authorization_code" +
+                    "&code=$([uri]::EscapeDataString($code))" +
+                    "&redirect_uri=http%3A%2F%2Flocalhost" +
+                    "&client_id=$clientId" +
+                    "&client_secret=$([uri]::EscapeDataString($clientSecret))"
+            $r = Invoke-RestMethod 'https://discord.com/api/oauth2/token' `
+                     -Method Post -Body $body `
+                     -ContentType 'application/x-www-form-urlencoded'
+            @{ access_token  = $r.access_token
+               refresh_token = $r.refresh_token
+               expires_at    = [datetime]::UtcNow.AddSeconds($r.expires_in).ToString('o')
+            } | ConvertTo-Json | Set-Content $tokenPath
+            $r.access_token
+        }
+
+        while ($true) {
+            $pipe = $null
+            try {
+                $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', 'discord-ipc-0',
+                    [IO.Pipes.PipeDirection]::InOut, [IO.Pipes.PipeOptions]::None)
+                $pipe.Connect(5000)
+
+                # Handshake (opcode 0)
+                Write-Frame $pipe 0 ('{"v":1,"client_id":"' + $clientId + '"}')
+                $frame = Read-Frame $pipe
+                if ($frame.evt -ne 'READY') { throw "Expected READY, got $($frame.evt)" }
+
+                # Authenticate
+                $token = Get-Token $pipe
+                Send-Cmd $pipe 'AUTHENTICATE' @{ access_token = $token }
+                do { $frame = Read-Frame $pipe } while ($frame -and $frame.cmd -ne 'AUTHENTICATE')
+                if ($frame.evt -eq 'ERROR') {
+                    # Token rejected; delete it so next attempt does full auth
+                    Remove-Item $tokenPath -Force -ErrorAction SilentlyContinue
+                    throw "Authentication rejected: $($frame.data.message)"
+                }
+
+                # Get initial voice channel state
+                Send-Cmd $pipe 'GET_SELECTED_VOICE_CHANNEL' @{}
+                do { $frame = Read-Frame $pipe } while ($frame -and $frame.cmd -ne 'GET_SELECTED_VOICE_CHANNEL')
+                $discordState.InCall = ($null -ne $frame.data -and $null -ne $frame.data.id)
+
+                # Subscribe to voice channel changes
+                Send-Cmd $pipe 'SUBSCRIBE' @{ evt = 'VOICE_CHANNEL_SELECT' }
+
+                # Event loop
+                while ($true) {
+                    $frame = Read-Frame $pipe
+                    if ($null -eq $frame) { break }
+                    if ($frame.evt -eq 'VOICE_CHANNEL_SELECT') {
+                        $discordState.InCall = ($null -ne $frame.data.channel_id)
+                    }
+                }
+            } catch { }
+            finally {
+                $discordState.InCall = $false
+                if ($null -ne $pipe) { try { $pipe.Dispose() } catch { } }
+            }
+            Start-Sleep -Seconds 5
+        }
+    })
+    $script:discordIpcJob = $ps
+    $null = $ps.BeginInvoke()
 }
+
+# ── App detection ────────────────────────────────────────────────────────────
+
+function Test-DiscordActive { $discordState.InCall }
 
 function Test-ZoomActive {
     # CptHost.exe is Zoom's media host; Zoom.exe checked as fallback for older versions
@@ -318,14 +462,15 @@ Start-Transcript -Path "$logDir\monitor.log" -Append
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
-$active                 = $false
-$lastSent               = [datetime]::MinValue
-$networkApplicable      = $null   # $null = unknown; $true or $false once determined
-$detectedApp            = $null   # last app logged as detected
-$script:discordVoicePid = $null   # PID of Discord voice subprocess during a call
+$active            = $false
+$lastSent          = [datetime]::MinValue
+$networkApplicable = $null   # $null = unknown; $true or $false once determined
+$detectedApp       = $null   # last app logged as detected
 
 $routerDisplay = if ($RouterMac) { $RouterMac } else { 'any' }
 Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $routerDisplay)"
+
+Start-DiscordIpcMonitor
 
 try { while ($true) {
     $now = [datetime]::UtcNow
@@ -372,4 +517,8 @@ try { while ($true) {
     }
 
     Start-Sleep -Seconds $PollSeconds
-} } finally { Log "Shutting down"; Stop-Transcript }
+} } finally {
+    if ($script:discordIpcJob) { $script:discordIpcJob.Dispose() }
+    Log "Shutting down"
+    Stop-Transcript
+}
