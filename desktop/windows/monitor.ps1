@@ -1,8 +1,11 @@
 # Monitors Discord voice and Zoom audio, updating the on-air indicator.
 # Checks Discord first; skips Zoom if Discord is already active.
 #
-# Detection uses the Windows Audio Session API (WASAPI) to find which process
-# PIDs have active audio sessions, matched against Discord/Zoom process IDs.
+# Detection:
+#   Discord: active UDP endpoints owned by Discord processes (WebRTC voice traffic).
+#            Discord uses UDP only for voice/video; TCP handles all other traffic.
+#   Zoom:    Windows Audio Session API (WASAPI) — CptHost.exe only has an audio
+#            session during an active meeting.
 #
 # Usage:
 #   $env:ONAIR_SERVER_URL = "http://192.168.1.1:5000"
@@ -30,11 +33,22 @@
 #      $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 `
 #                    -RestartInterval (New-TimeSpan -Minutes 1)
 #      Register-ScheduledTask -TaskName "OnAirMonitor" -Action $action `
-#                             -Trigger $trigger -Settings $settings
+#                             -Trigger $trigger -Settings $settings -Force
+#
+# 4. To suppress the console window: open Task Scheduler, find OnAirMonitor,
+#    Properties → General → "Run whether user is logged on or not", enter password.
 #
 # To start now:  Start-ScheduledTask  -TaskName "OnAirMonitor"
 # To stop:       Stop-ScheduledTask   -TaskName "OnAirMonitor"
 # To remove:     Unregister-ScheduledTask -TaskName "OnAirMonitor" -Confirm:$false
+#
+# ── Viewing logs ─────────────────────────────────────────────────────────────
+#
+# When running via Task Scheduler, output is written to:
+#   %LOCALAPPDATA%\OnAirMonitor\monitor.log
+#
+# To tail it in real time:
+#   Get-Content "$env:LOCALAPPDATA\OnAirMonitor\monitor.log" -Wait -Tail 20
 
 param(
     [string]$ServerUrl    = $env:ONAIR_SERVER_URL,
@@ -243,8 +257,16 @@ function Send-Notification([string]$State) {
 # ── App detection ────────────────────────────────────────────────────────────
 
 function Test-DiscordActive {
-    # Discord voice/video uses WebRTC; an active audio session means a live call
-    Test-ProcessHasAudio "Discord"
+    # Discord pre-allocates one UDP socket on focus (ICE candidate gathering).
+    # Joining a voice call spawns a second subprocess that opens its own UDP
+    # socket — so 2+ distinct Discord PIDs with UDP means an active call.
+    $procs = Get-Process -Name "Discord" -ErrorAction SilentlyContinue
+    if (-not $procs) { return $false }
+    $pids = $procs.Id
+    $discordPidsWithUdp = @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue |
+        Where-Object { $_.OwningProcess -in $pids } |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    return $discordPidsWithUdp.Count -ge 2
 }
 
 function Test-ZoomActive {
@@ -274,6 +296,10 @@ if ($ListNetworks) {
     Show-Networks
     exit
 }
+
+$logDir = "$HOME\AppData\Local\OnAirMonitor"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+Start-Transcript -Path "$logDir\monitor.log" -Append
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
@@ -330,4 +356,4 @@ try { while ($true) {
     }
 
     Start-Sleep -Seconds $PollSeconds
-} } finally { Log "Shutting down" }
+} } finally { Log "Shutting down"; Stop-Transcript }

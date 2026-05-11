@@ -59,9 +59,16 @@
 # 2. Load it:
 #      launchctl load ~/Library/LaunchAgents/on-air-monitor.plist
 #
-# To stop:     launchctl unload ~/Library/LaunchAgents/on-air-monitor.plist
-# To check:    launchctl list | grep on-air-monitor
-# To view log: tail -f /tmp/on-air-monitor.log
+# To stop:  launchctl unload ~/Library/LaunchAgents/on-air-monitor.plist
+# To check: launchctl list | grep on-air-monitor
+#
+# ── Viewing logs ─────────────────────────────────────────────────────────────
+#
+# When running via launchd, output is written to /tmp/on-air-monitor.log
+# (set by StandardOutPath/StandardErrorPath in the plist above).
+#
+# To tail it in real time:
+#   tail -f /tmp/on-air-monitor.log
 
 SERVER_URL="${ONAIR_SERVER_URL:-http://192.168.1.1:5000}"
 NAME="${ONAIR_NAME:-desktop}"
