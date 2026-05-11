@@ -2,8 +2,9 @@
 # Checks Discord first; skips Zoom if Discord is already active.
 #
 # Detection:
-#   Discord: Windows Audio Session API (WASAPI) — Discord only has an audio
-#            session while actively in a voice or video call.
+#   Discord: 2+ distinct Discord PIDs with UDP endpoints signals call start
+#            (WebRTC voice). The voice subprocess PID is then tracked directly;
+#            the call ends when that process exits, not when its UDP socket does.
 #   Zoom:    Windows Audio Session API (WASAPI) — CptHost.exe only has an audio
 #            session during an active meeting.
 #
@@ -257,7 +258,30 @@ function Send-Notification([string]$State) {
 # ── App detection ────────────────────────────────────────────────────────────
 
 function Test-DiscordActive {
-    Test-ProcessHasAudio "Discord"
+    $procs = Get-Process -Name "Discord" -ErrorAction SilentlyContinue
+    if (-not $procs) { $script:discordVoicePid = $null; return $false }
+    $allPids = $procs.Id
+
+    # Once a call is detected, track by process existence — not by UDP socket —
+    # so transient socket recreation mid-call doesn't cause false negatives.
+    if ($null -ne $script:discordVoicePid) {
+        if ($allPids -contains $script:discordVoicePid) { return $true }
+        $script:discordVoicePid = $null  # subprocess exited → call ended
+    }
+
+    # Call start: 2+ distinct Discord PIDs with UDP (main process pre-allocates
+    # one socket; voice subprocess opens a second when joining a call).
+    $pidsWithUdp = @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue |
+        Where-Object { $_.OwningProcess -in $allPids } |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    if ($pidsWithUdp.Count -lt 2) { return $false }
+
+    # The voice subprocess is the most recently spawned Discord process with UDP.
+    $script:discordVoicePid = ($procs |
+        Where-Object { $_.Id -in $pidsWithUdp } |
+        Sort-Object StartTime -Descending |
+        Select-Object -First 1).Id
+    return $true
 }
 
 function Test-ZoomActive {
@@ -294,10 +318,11 @@ Start-Transcript -Path "$logDir\monitor.log" -Append
 
 # ── Main loop ────────────────────────────────────────────────────────────────
 
-$active            = $false
-$lastSent          = [datetime]::MinValue
-$networkApplicable = $null   # $null = unknown; $true or $false once determined
-$detectedApp       = $null   # last app logged as detected
+$active                 = $false
+$lastSent               = [datetime]::MinValue
+$networkApplicable      = $null   # $null = unknown; $true or $false once determined
+$detectedApp            = $null   # last app logged as detected
+$script:discordVoicePid = $null   # PID of Discord voice subprocess during a call
 
 $routerDisplay = if ($RouterMac) { $RouterMac } else { 'any' }
 Write-Host "Monitoring Discord and Zoom (server: $ServerUrl, name: $Name, router: $routerDisplay)"
