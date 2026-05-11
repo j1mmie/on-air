@@ -2,8 +2,8 @@
 # Checks Discord first; skips Zoom if Discord is already active.
 #
 # Detection:
-#   Discord: active UDP endpoints owned by Discord processes (WebRTC voice traffic).
-#            Discord uses UDP only for voice/video; TCP handles all other traffic.
+#   Discord: Windows Audio Session API (WASAPI) — Discord only has an audio
+#            session while actively in a voice or video call.
 #   Zoom:    Windows Audio Session API (WASAPI) — CptHost.exe only has an audio
 #            session during an active meeting.
 #
@@ -257,16 +257,7 @@ function Send-Notification([string]$State) {
 # ── App detection ────────────────────────────────────────────────────────────
 
 function Test-DiscordActive {
-    # Discord pre-allocates one UDP socket on focus (ICE candidate gathering).
-    # Joining a voice call spawns a second subprocess that opens its own UDP
-    # socket — so 2+ distinct Discord PIDs with UDP means an active call.
-    $procs = Get-Process -Name "Discord" -ErrorAction SilentlyContinue
-    if (-not $procs) { return $false }
-    $pids = $procs.Id
-    $discordPidsWithUdp = @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue |
-        Where-Object { $_.OwningProcess -in $pids } |
-        Select-Object -ExpandProperty OwningProcess -Unique)
-    return $discordPidsWithUdp.Count -ge 2
+    Test-ProcessHasAudio "Discord"
 }
 
 function Test-ZoomActive {
