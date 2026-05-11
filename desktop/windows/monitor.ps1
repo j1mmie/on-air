@@ -318,13 +318,10 @@ function Start-DiscordIpcMonitor {
             [Text.Encoding]::UTF8.GetString($b) | ConvertFrom-Json
         }
 
-        function Send-Cmd([IO.Stream]$s, [string]$cmd, $cmdArgs) {
-            $payload = [pscustomobject]@{
-                cmd   = $cmd
-                args  = $cmdArgs
-                nonce = [guid]::NewGuid().ToString()
-            } | ConvertTo-Json -Compress -Depth 5
-            Write-Frame $s 1 $payload
+        function Send-Cmd([IO.Stream]$s, [string]$cmd, $cmdArgs, [string]$evt = $null) {
+            $obj = [ordered]@{ cmd = $cmd; args = $cmdArgs; nonce = [guid]::NewGuid().ToString() }
+            if ($evt) { $obj['evt'] = $evt }
+            Write-Frame $s 1 ($obj | ConvertTo-Json -Compress -Depth 5)
         }
 
         function Get-Token([IO.Stream]$pipe) {
@@ -402,7 +399,7 @@ function Start-DiscordIpcMonitor {
                 $discordState.InCall = ($null -ne $frame.data -and $null -ne $frame.data.id)
 
                 # Subscribe to voice channel changes
-                Send-Cmd $pipe 'SUBSCRIBE' @{ evt = 'VOICE_CHANNEL_SELECT' }
+                Send-Cmd $pipe 'SUBSCRIBE' @{} 'VOICE_CHANNEL_SELECT'
 
                 # Event loop
                 while ($true) {
