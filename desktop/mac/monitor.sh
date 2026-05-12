@@ -11,10 +11,21 @@
 # Or export vars from settings.toml first (keys must use ONAIR_ prefix):
 #   export $(grep -v '^#' ../settings.toml | xargs) && ./monitor.sh
 #
+# ── Discord IPC setup ────────────────────────────────────────────────────────
+#
+# 1. Go to https://discord.com/developers/applications and create an application.
+# 2. Under OAuth2, add http://localhost as a redirect URI and save.
+# 3. Copy the Client ID (General Information) and Client Secret (OAuth2).
+# 4. Pass them via environment variables (see launchd plist example below).
+#
+# On first run, Discord will show a one-time consent popup — click Authorize.
+# The token is saved to ~/.config/on-air/discord_token.json and refreshed
+# automatically; you will not be prompted again.
+#
 # ── Startup (launchd) ────────────────────────────────────────────────────────
 #
 # 1. Create ~/Library/LaunchAgents/on-air-monitor.plist with these contents,
-#    updating the script path, SERVER_URL, and NAME:
+#    updating the script path and values:
 #
 #    <?xml version="1.0" encoding="UTF-8"?>
 #    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -40,6 +51,12 @@
 #
 #        <key>ONAIR_ROUTER_MAC</key>
 #        <string>4c:1:43:8e:76:82</string>
+#
+#        <key>ONAIR_DISCORD_CLIENT_ID</key>
+#        <string>your-client-id</string>
+#
+#        <key>ONAIR_DISCORD_CLIENT_SECRET</key>
+#        <string>your-client-secret</string>
 #      </dict>
 #
 #      <key>RunAtLoad</key>
@@ -48,7 +65,7 @@
 #      <key>KeepAlive</key>
 #      <true/>
 #
-#      <key>StandardOutPath</key> 
+#      <key>StandardOutPath</key>
 #      <string>/tmp/on-air-monitor.log</string>
 #
 #      <key>StandardErrorPath</key>
@@ -73,6 +90,8 @@
 SERVER_URL="${ONAIR_SERVER_URL:-http://192.168.1.1:5000}"
 NAME="${ONAIR_NAME:-desktop}"
 ROUTER_MAC="${ONAIR_ROUTER_MAC:-}"
+DISCORD_CLIENT_ID="${ONAIR_DISCORD_CLIENT_ID:-}"
+DISCORD_CLIENT_SECRET="${ONAIR_DISCORD_CLIENT_SECRET:-}"
 POLL_INTERVAL=5
 RENEW_INTERVAL=60
 
@@ -133,17 +152,12 @@ list_networks() {
 # ── App detection ────────────────────────────────────────────────────────────
 
 is_discord_active() {
-    # Discord voice/video uses WebRTC over UDP; active UDP connections indicate a call
-    lsof -i UDP -a -c Discord 2>/dev/null | grep -q "Discord"
+    [[ "$(cat "$DISCORD_STATE_FILE" 2>/dev/null)" == "true" ]]
 }
 
 is_zoom_active() {
     # CptHost is spawned only while Zoom is connected to meeting audio
     pgrep -x "CptHost" > /dev/null
-}
-
-is_any_active() {
-    is_discord_active || is_zoom_active
 }
 
 get_active_app() {
@@ -155,7 +169,14 @@ get_active_app() {
 
 log() { echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"; }
 
-shutdown() { log "Shutting down"; exit 0; }
+discord_ipc_pid=""
+
+shutdown() {
+    log "Shutting down"
+    [[ -n "$discord_ipc_pid" ]] && kill "$discord_ipc_pid" 2>/dev/null
+    rm -f "$DISCORD_STATE_FILE"
+    exit 0
+}
 trap shutdown SIGTERM SIGINT SIGHUP
 
 # ── List networks mode ───────────────────────────────────────────────────────
@@ -167,6 +188,15 @@ if [[ "$1" == "--list-networks" ]]; then
 fi
 
 # ── Main loop ────────────────────────────────────────────────────────────────
+
+DISCORD_STATE_FILE=$(mktemp /tmp/on_air_discord_XXXXXX)
+
+if [[ -n "$DISCORD_CLIENT_ID" && -n "$DISCORD_CLIENT_SECRET" ]]; then
+    python3 "$(dirname "$0")/discord_ipc.py" "$DISCORD_STATE_FILE" &
+    discord_ipc_pid=$!
+else
+    log "ONAIR_DISCORD_CLIENT_ID or ONAIR_DISCORD_CLIENT_SECRET not set; Discord detection disabled"
+fi
 
 active=false
 last_sent=0
