@@ -13,6 +13,9 @@
 #
 # ── Discord IPC setup ────────────────────────────────────────────────────────
 #
+# If you see SSL certificate errors, install the certifi package:
+#   pip3 install certifi
+#
 # 1. Go to https://discord.com/developers/applications and create an application.
 # 2. Under OAuth2, add http://localhost as a redirect URI and save.
 # 3. Copy the Client ID (General Information) and Client Secret (OAuth2).

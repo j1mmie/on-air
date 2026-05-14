@@ -5,6 +5,7 @@ import glob
 import json
 import os
 import socket
+import ssl
 import struct
 import sys
 import tempfile
@@ -64,12 +65,22 @@ def send_cmd(sock, cmd, args, evt=None):
     write_frame(sock, 1, obj)
 
 
+def _ssl_context():
+    # On macOS, Python doesn't use the system keychain by default.
+    # Prefer certifi's CA bundle when available; otherwise use the default context.
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def http_post(url, params):
     data = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(
         url, data=data,
         headers={'Content-Type': 'application/x-www-form-urlencoded'})
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=10, context=_ssl_context()) as resp:
         return json.loads(resp.read())
 
 
