@@ -83,8 +83,12 @@ def http_post(url, params):
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent': 'DiscordBot (on-air, 1.0)',
         })
-    with urllib.request.urlopen(req, timeout=10, context=_ssl_context()) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=10, context=_ssl_context()) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors='replace')
+        raise urllib.error.HTTPError(e.url, e.code, f'{e.reason} — {body}', e.headers, None)
 
 
 def save_token(data):
@@ -131,7 +135,6 @@ def get_token(sock):
     data = http_post('https://discord.com/api/oauth2/token', {
         'grant_type':    'authorization_code',
         'code':          frame['data']['code'],
-        'redirect_uri':  'http://localhost',
         'client_id':     CLIENT_ID,
         'client_secret': CLIENT_SECRET,
     })
