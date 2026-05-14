@@ -79,7 +79,10 @@ def http_post(url, params):
     data = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(
         url, data=data,
-        headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        headers={
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'DiscordBot (on-air, 1.0)',
+        })
     with urllib.request.urlopen(req, timeout=10, context=_ssl_context()) as resp:
         return json.loads(resp.read())
 
